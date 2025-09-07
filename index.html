@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Guardian Ranker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<!-- I love Urvi -->
+<body>
+  <div class="main-container">
+    <h1>Guardian Ranker</h1>
+    <p>Enter Bungie.net Username</p>
+
+    <div class="search-container">
+      <input type="text" id="nameInput" placeholder="Guardian#1234" autocomplete="on" />
+      <button id="searchBtn" title="Search">➤</button>
+    </div>
+
+    <ul id="suggestions"></ul>
+
+    <div class="results-container" style="display: flex; gap: 20px; flex-wrap: nowrap;">
+      <!-- Left Side: Player Card -->
+      <div id="results" class="user-card" style="flex: 1 1 400px;">
+        <!-- PvP / PvE Buttons -->
+<div id="modeButtons" style="display: none; margin-top: 20px; text-align: center;">
+  <a id="pvpBtn" class="mode-btn red-btn" href="#">PvP Stats</a>
+  <a id="pveBtn" class="mode-btn blue-btn" href="#">PvE Stats</a>
+</div>
+
+      </div>
+
+      <!-- Middle: Leaderboards -->
+      <div class="user-card" style="flex: 0 0 auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h2>Leaderboard</h2>
+          <a href="leaderboards.html" id="viewAllLeaderboardBtn"
+             style="padding: 6px 12px; font-size: 14px; border: none; border-radius: 6px; background: #007bff; color: white; text-decoration: none; cursor: pointer;">
+             View All
+          </a>
+        </div>
+        <h3>Highest Character</h3>
+        <table id="highest-character" class="styled-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Bungie Name</th>
+              <th>Class</th>
+              <th>Power Level</th>
+            </tr>
+          </thead>
+          <tbody id="highest-character-body">
+            <!-- Rows injected by highestCharacter.js -->
+          </tbody>
+        </table>
+        <button id="toggleHighestCharacterBtn" style="margin-top: 10px;">Show More</button>
+        <h3>Triumph Score</h3>
+        <table id="leaderboard" class="styled-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Bungie Name</th>
+              <th>Triumph Score</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-body">
+            <!-- Leaderboard rows injected by leaderboard.js -->
+          </tbody>
+        </table>
+        <button id="toggleLeaderboardBtn" style="margin-top: 10px;">Show More</button>
+        <h3>Time Played</h3>
+        <table id="time-played" class="styled-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Bungie Name</th>
+              <th>Hours Played</th>
+            </tr>
+          </thead>
+          <tbody id="time-played-body">
+            <!-- Rows injected by leaderboard.js -->
+          </tbody>
+        </table>
+        <button id="toggleTimePlayedBtn" style="margin-top: 10px;">Show More</button>
+      </div>
+
+      <!-- Right Side: Global Game Stats Card -->
+      <div id="game-stats" class="user-card" style="flex: 0 0 300px;">
+        <div class="user-header">
+          <div class="user-info">
+            <h2 class="bungie-name">Global Game Stats</h2>
+          </div>
+        </div>
+        <div class="stats-container">
+          <!-- Season info will be injected here by JS -->
+        </div>
+    </div>
+  </div>
+
+  <!-- Scripts at the very end -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="global.js"></script>
+  <script type="module" src="search.js"></script>
+  <script type="module" src="leaderboard.js"></script>
+</body>
+</html>

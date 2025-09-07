@@ -1,0 +1,467 @@
+/* Base styles */
+body {
+  background-color: #121212;
+  color: #e0e0e0;
+  font-family: Arial, sans-serif;
+  padding: clamp(10px, 2vw, 20px);
+  margin: 0;
+  min-height: 100vh;
+}
+
+h1 {
+  color: #ffffff;
+}
+
+/* Search container and input */
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  width: 100%;
+  max-width: 600px;
+  flex-wrap: nowrap;
+}
+
+#nameInput {
+  flex: 1;
+  padding: 8px;
+  font-size: clamp(0.875rem, 2vw, 1rem);
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #fff;
+  min-width: 200px;
+  max-width: 400px;
+  width: 100%;
+}
+
+input[type="text"] {
+  /* Removed duplicate styles, input is #nameInput */
+  /* If there are other text inputs, you can adjust here */
+}
+
+/* Search button */
+#searchBtn {
+  cursor: pointer;
+  font-size: 1.2rem;
+  background: #444;
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  user-select: none;
+  transition: background-color 0.3s ease;
+}
+
+#searchBtn:hover {
+  background: #666;
+}
+
+/* Suggestions dropdown */
+ul#suggestions {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 0;
+  width: 100%;
+  min-width: 200px;
+  max-width: 400px;
+  max-height: min(300px, 50vh);
+  overflow-y: auto;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #1e1e1e;
+  display: none;
+  box-sizing: border-box;
+  z-index: 10;
+}
+
+ul#suggestions.show {
+  display: block;
+}
+
+ul#suggestions li {
+  background-color: #1f1f1f;
+  margin: 4px 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #ddd;
+  user-select: none;
+}
+
+ul#suggestions li:hover {
+  background-color: #333333;
+}
+
+/* User card styling */
+.user-card {
+  background-color: #282828;
+  border-radius: 8px;
+  padding: clamp(15px, 3vw, 20px);
+  width: 100%;
+  max-width: 400px;
+  margin-left: 0;
+  box-sizing: border-box;
+}
+
+.platform-icon {
+  width: clamp(20px, 5vw, 24px);
+  height: clamp(20px, 5vw, 24px);
+  min-width: 20px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+
+.user-header {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(8px, 2vw, 12px);
+  border-bottom: 1px solid #444;
+  padding-bottom: clamp(10px, 2vw, 15px);
+  margin-bottom: clamp(10px, 2vw, 15px);
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bungie-name {
+  font-size: clamp(1.1em, 3vw, 1.4em);
+  color: #fff;
+  margin: 0;
+  word-break: break-word;
+  line-height: 1.2;
+}
+
+.display-name {
+  color: #888;
+  font-size: clamp(0.8em, 2vw, 0.9em);
+  margin: 0;
+  word-break: break-word;
+  line-height: 1.2;
+}
+
+/* Stats section */
+.stats-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-sizing: border-box;
+}
+
+.stat-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  color: #888;
+  font-size: clamp(0.8em, 2vw, 0.9em);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0;
+}
+
+.stat-value {
+  color: #fff;
+  font-size: clamp(1.2em, 4vw, 1.6em);
+  font-weight: bold;
+  margin-top: 0;
+}
+
+.stat-value.high-power {
+  color: #fdff79;
+}
+
+/* Season info */
+.stat-value.season-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.season-info-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: clamp(1em, 3vw, 1.2em);
+  font-weight: bold;
+}
+
+.season-info-top img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.season-info-dates {
+  font-size: 0.8em;
+  color: #888;
+}
+
+/* Loading spinner */
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 120px;
+}
+
+.loading-spinner div {
+  border: 8px solid #444;
+  border-top: 8px solid #fdff79;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Results container aligned left */
+.results-container {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  box-sizing: border-box;
+}
+
+/* Override #results and #game-stats max widths */
+#results {
+  width: 100%;
+  max-width: 600px;
+  box-sizing: border-box;
+}
+
+#game-stats {
+  width: 100%;
+  max-width: 500px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .search-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #nameInput,
+  ul#suggestions {
+    max-width: none;
+  }
+
+  .results-container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  #results,
+  #game-stats {
+    max-width: 100%;
+  }
+}
+
+/* Download raw data button */
+#downloadRawBtn {
+  cursor: pointer;
+  font-size: 1rem;
+  background: #444;
+  border: none;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 4px;
+  user-select: none;
+  transition: background-color 0.3s ease;
+}
+
+#downloadRawBtn:hover {
+  background: #666;
+}
+
+/* Weekly reset timer */
+#weekly-reset-timer {
+  margin-top: 6px;
+  font-size: 0.75em;
+  color: #90ee90;
+  font-weight: 600;
+  line-height: 1.3;
+  background-color: #222;
+  padding: 6px 12px;
+  border-radius: 6px;
+  max-width: fit-content;
+  box-shadow: 0 0 6px #90ee90a0;
+  white-space: normal;
+  user-select: none;
+}
+.stat-value.season-info > div:last-child {
+  margin-top: 10px;
+}
+/* Leaderboard table styling */
+.leaderboard-section {
+  background-color: #282828;
+  border-radius: 8px;
+  padding: clamp(15px, 3vw, 20px);
+  color: #e0e0e0;
+  max-width: 400px;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+.leaderboard-section h2 {
+  margin-top: 0;
+  color: #fff;
+  font-weight: bold;
+  font-size: clamp(1.1em, 3vw, 1.3em);
+  margin-bottom: clamp(12px, 2vw, 16px);
+}
+
+/* Leaderboard Table Styles - unified */
+.styled-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 14px;
+  text-align: left;
+  background: #1e1e2f; /* match .user-card background */
+  color: #fff;
+  border-radius: 8px;
+  overflow: hidden; /* ensures rounded corners work */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.styled-table thead {
+  background: #2c2c44;
+}
+
+.styled-table th,
+.styled-table td {
+  padding: 10px 12px;
+  border: 1px solid #333;
+}
+
+.styled-table th {
+  text-align: center; /* headers centered */
+  color: #fff;
+  font-weight: bold;
+}
+
+.styled-table td:first-child {
+  text-align: center; /* rank column */
+}
+
+.styled-table td:nth-child(2) {
+  text-align: left; /* Bungie Name column */
+}
+
+.styled-table tbody tr {
+  border-bottom: 1px solid #333;
+}
+
+.styled-table tbody tr:nth-child(even) {
+  background: #25253a;
+}
+
+.styled-table tbody tr:nth-child(odd) {
+  background: #1b1b2b;
+}
+
+.styled-table tbody tr:hover {
+  background: #333355;
+}
+
+/* Flex container for leaderboard cards */
+.leaderboards-container {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap; /* allow wrap on smaller screens */
+  justify-content: flex-start;
+  margin-top: 20px;
+}
+
+.leaderboard-section {
+  flex: 1 1 350px; /* grow/shrink, minimum width */
+  max-width: 400px;
+}
+.highlight {
+  background-color: rgb(213, 122, 255) !important;
+  font-weight: bold;
+}
+/* Shared Search Input */
+#nameInput,
+#leaderboardSearch {
+  flex: 1;
+  padding: 8px;
+  font-size: clamp(0.875rem, 2vw, 1rem);
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #fff;
+  min-width: 200px;
+  max-width: 400px;
+  width: 100%;
+}
+
+#nameInput:focus,
+#leaderboardSearch:focus {
+  border-color: #007bff;
+}
+
+/* Shared Search Button */
+#searchBtn,
+#leaderboardSearchBtn {
+  cursor: pointer;
+  font-size: 1.2rem;
+  background: #444;
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  user-select: none;
+  transition: background-color 0.3s ease;
+}
+
+#searchBtn:hover,
+#leaderboardSearchBtn:hover {
+  background: #666;
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.back-link {
+  color: #90ee90; /* soft green to match your timer highlight */
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.back-link:hover {
+  color: #cfff9d; /* lighter green on hover */
+  text-decoration: underline;
+}
+.time-unit {
+  color: #dbdbdb; /* gold highlight */
+  margin-left: 2px;
+}

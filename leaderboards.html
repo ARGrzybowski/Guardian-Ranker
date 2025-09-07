@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>All Leaderboards</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page-header">
+  <a href="index.html" class="back-link">← Back</a>
+  <h1>Guardian Ranker</h1>
+</div>
+<p>Search for a Guardian across all leaderboards</p>
+
+
+    <!-- Search Bar -->
+    <div class="search-container">
+      <input type="text" id="leaderboardSearch" placeholder="Guardian#1234" autocomplete="on" />
+      <button id="leaderboardSearchBtn" title="Search">➤</button>
+    </div>
+
+    <!-- Results -->
+    <ul id="suggestions"></ul>
+
+    <!-- Leaderboards -->
+    <h1 style="margin-top: 30px;">All Guardian Leaderboards</h1>
+
+    <div class="leaderboards-container">
+<!-- Highest Character Leaderboard -->
+      <section class="leaderboard-section">
+        <h2>Power</h2>
+        <table class="styled-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Bungie Name</th>
+              <th>Class</th>
+              <th>Power Level</th>
+            </tr>
+          </thead>
+          <tbody id="highest-character-body"></tbody>
+        </table>
+        <button id="toggleHighestCharacterBtn">Show More</button>
+      </section>
+
+      <!-- Triumph Score Leaderboard -->
+      <section class="leaderboard-section">
+        <h2>Triumph Score</h2>
+        <table class="styled-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Bungie Name</th>
+              <th>Triumph Score</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-body"></tbody>
+        </table>
+        <button id="toggleLeaderboardBtn">Show More</button>
+      </section>
+      <!-- Time played Leaderboard -->
+      <section class="leaderboard-section">
+        <h2>Time Played</h2>
+        <table class="styled-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Bungie Name</th>
+              <th>Time played</th>
+            </tr>
+          </thead>
+          <tbody id="time-played-body"></tbody>
+        </table>
+        <button id="toggleTimePlayedBtn">Show More</button>
+      </section>
+
+      <!-- Guardian Rank Leaderboard -->
+      <section class="leaderboard-section">
+        <h2>Guardian Rank</h2>
+        <table class="styled-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Bungie Name</th>
+              <th>Guardian Rank</th>
+            </tr>
+          </thead>
+          <tbody id="guardian-rank-body"></tbody>
+        </table>
+        <button id="toggleGuardianRankBtn">Show More</button>
+      </section>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="leaderboard.js"></script>
+  <script type="module" src="highestCharacter.js"></script>
+  <script type="module" src="leaderboardSearch.js"></script>
+  <script type="module" src="timePlayed.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "guardian-rank",
+  "version": "1.0.0",
+  "description": "Destiny 2 player stats viewer",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx live-server"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.54.0",
+    "axios": "^1.11.0",
+    "node-fetch": "^2.7.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
