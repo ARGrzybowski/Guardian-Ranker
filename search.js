@@ -1,24 +1,46 @@
+// ---------------------------------------------
+// Guardian Ranker - Bungie.net Profile Search
+// ---------------------------------------------
+// This file handles searching for Destiny 2 players by Bungie name,
+// fetching their profile data, and updating leaderboards.
+// It also manages search suggestions and URL-based navigation.
+
+// Import leaderboard and character update functions
 import { upsertPlayer, loadLeaderboard, addOrUpdatePlayer } from './leaderboard.js';
 import { upsertHighestCharacter, loadHighestCharacterLeaderboard } from './highestCharacter.js';
 
+// Bungie API key and DOM element references
 const API_KEY = '12ecbda2bf10444b8b8058f825f33a43';
 const input = document.getElementById('nameInput');
 const suggestions = document.getElementById('suggestions');
 const results = document.getElementById('results');
 const searchBtn = document.getElementById('searchBtn');
+
+// Maps Destiny 2 class type numbers to names
 const classTypeMap = { 0: 'Titan', 1: 'Hunter', 2: 'Warlock' };
 
+// State variables for search and season data
 let timeoutId = null;
 let seasonData = null;
 let currentSeasonHash = null;
 
-// small helpers and limits
+// ---------------------------------------------
+// Search Helper Constants and Functions
+// ---------------------------------------------
+
+// Limits for Bungie API paging and fallback
 const MAX_GLOBAL_PAGES = 50;
 const MAX_PREFIX_PAGES = 10;
 const FALLBACK_WINDOW = 5;
+
+// Sleep helper for retry logic
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// performs a small, fail-fast paged Prefix search starting at startP
+// ---------------------------------------------
+// Prefix Fallback Search
+// ---------------------------------------------
+// If the main GlobalName search fails, this function tries a prefix search
+// to find the exact Bungie name and code.
 async function prefixFallback(name, code, startP = 0) {
   console.log(`Prefix fallback starting at page ${startP}`);
   let consecutive5xx = 0;
@@ -40,7 +62,7 @@ async function prefixFallback(name, code, startP = 0) {
           }
           continue;
         }
-        break; // client error - stop fallback
+        break; // Stop fallback on client error
       }
 
       consecutive5xx = 0;
@@ -55,13 +77,16 @@ async function prefixFallback(name, code, startP = 0) {
       if (pfResults.length === 0) break;
     } catch (err) {
       console.warn('Prefix fallback error on page', p, err);
-      break; // network/unexpected, abort fallback
+      break; // Abort fallback on network/unexpected error
     }
   }
   return null;
 }
 
-// robust GlobalName search that fails fast on a bad page and falls back once
+// ---------------------------------------------
+// GlobalName Search
+// ---------------------------------------------
+// Main search function for Bungie names. Handles paging, retries, and fallback.
 async function searchByGlobalName(name, code, startPage = 0) {
   try {
     results.innerHTML = `<div class="loading-spinner"><div></div></div>`;
@@ -75,7 +100,7 @@ async function searchByGlobalName(name, code, startPage = 0) {
       let data = null;
       let lastWas5xx = false;
 
-      // try this page with a few retries for transient 5xx/network errors
+      // Retry logic for transient errors
       while (attempts < 3) {
         try {
           if (page > 0 && attempts === 0) await sleep(300);
@@ -96,7 +121,7 @@ async function searchByGlobalName(name, code, startPage = 0) {
               await sleep(300 * attempts);
               continue;
             }
-            // client error - abort search entirely
+            // Abort search on client error
             results.textContent = `API Error: HTTP ${res.status}`;
             return;
           }
@@ -110,7 +135,7 @@ async function searchByGlobalName(name, code, startPage = 0) {
         }
       }
 
-      // if we couldn't get data for this page, do a single prefix fallback and stop
+      // If page fails after retries, try prefix fallback once
       if (!data) {
         console.warn(`Page ${page} failed after retries. Running single prefix fallback and stopping.`);
         const fallbackResult = await prefixFallback(name, code, page);
@@ -119,16 +144,15 @@ async function searchByGlobalName(name, code, startPage = 0) {
           showUser(fallbackResult);
           return;
         }
-        break; // stop scanning GlobalName pages
+        break; // Stop scanning GlobalName pages
       }
 
       if (data.ErrorCode !== 1) {
         console.warn(`API Error on page ${page}:`, data.ErrorStatus);
-        // respect throttle hint if present, otherwise continue to next page
+        // Respect throttle hint if present
         if (data.ThrottleSeconds && data.ThrottleSeconds > 0) {
           await sleep((data.ThrottleSeconds + 1) * 1000);
         } else {
-          // non-success, try next page (but don't treat as catastrophic)
           page++;
         }
         continue;
@@ -137,6 +161,7 @@ async function searchByGlobalName(name, code, startPage = 0) {
       const pageResults = data.Response.searchResults || [];
       console.log(`Page ${page} results: ${pageResults.length}`);
 
+      // Find exact match in results
       const exact = pageResults.find(u =>
         u.bungieGlobalDisplayName.toLowerCase() === name.toLowerCase() &&
         String(u.bungieGlobalDisplayNameCode).padStart(4, '0') === String(code).padStart(4, '0')
@@ -148,7 +173,7 @@ async function searchByGlobalName(name, code, startPage = 0) {
         return;
       }
 
-      // end of globalname results if this page is empty
+      // End search if no more results
       if (pageResults.length === 0) {
         console.log('End of GlobalName results at page', page);
         break;
@@ -157,7 +182,7 @@ async function searchByGlobalName(name, code, startPage = 0) {
       page++;
     }
 
-    // not found after scanning/fallback
+    // No user found after all attempts
     results.textContent = 'No users found (may be beyond scanned pages or private).';
   } catch (err) {
     console.error('Search error:', err);
@@ -165,10 +190,17 @@ async function searchByGlobalName(name, code, startPage = 0) {
   }
 }
 
+// ---------------------------------------------
+// Utility: Convert manifest hash to string key
+// ---------------------------------------------
 function toManifestKey(hash) {
   return typeof hash === 'number' ? (hash >>> 0).toString() : String(hash);
 }
 
+// ---------------------------------------------
+// Search Input & Button Event Listeners
+// ---------------------------------------------
+// Handles user typing and clicking the search button.
 input.addEventListener('input', e => {
   clearTimeout(timeoutId);
   const value = e.target.value.trim();
@@ -187,6 +219,10 @@ searchBtn.addEventListener('click', () => {
   handleSearch(input.value.trim(), false);
 });
 
+// ---------------------------------------------
+// Main Search Handler
+// ---------------------------------------------
+// Triggers search and suggestion logic, with optional delay for input events.
 function handleSearch(value, useDelay = true) {
   suggestions.innerHTML = '';
   suggestions.classList.remove('show');
@@ -201,6 +237,10 @@ function handleSearch(value, useDelay = true) {
   else doSearch();
 }
 
+// ---------------------------------------------
+// Prefix Search for Suggestions
+// ---------------------------------------------
+// Fetches Bungie names matching the prefix and displays clickable suggestions.
 async function searchPrefix(prefix) {
   try {
     const res = await fetch(`https://www.bungie.net/Platform/User/Search/Prefix/${encodeURIComponent(prefix)}/0/`, {
@@ -240,6 +280,11 @@ async function searchPrefix(prefix) {
   }
 }
 
+// ---------------------------------------------
+// Profile Display & Leaderboard Update
+// ---------------------------------------------
+// Fetches and displays full profile info for a Bungie user,
+// then updates all leaderboards with the latest data.
 async function showUser(user) {
   results.innerHTML = `<div class="user-card"><div class="loading-spinner"><div></div></div></div>`;
 
@@ -255,6 +300,7 @@ async function showUser(user) {
   const iconUrl = `https://www.bungie.net${iconPath}`;
 
   try {
+    // Fetch all relevant Destiny 2 profile components
     const components = [
       100, 200, 201, 202, 203, 204, 205, 300, 301, 302, 303, 304, 305, 306, 307,
       308, 309, 310, 311, 400, 401, 402, 403, 500, 600, 700, 800, 900, 1000,
@@ -276,6 +322,7 @@ async function showUser(user) {
       return;
     }
 
+    // Calculate playtime, scores, and ranks
     const chars = profileData.Response.characters?.data || {};
     const totalMinutes = Object.values(chars).reduce(
       (sum, c) => sum + (parseInt(c.minutesPlayedTotal) || 0),
@@ -290,6 +337,7 @@ async function showUser(user) {
     const highestGuardianRank =
       profileData.Response.profile?.data?.lifetimeHighestGuardianRank ?? 'Unavailable';
 
+    // Prepare leaderboard player object
     const player = {
       bungie_name: bungieName,
       membership_id: membershipId,
@@ -299,10 +347,12 @@ async function showUser(user) {
       highest_guardian_rank: highestGuardianRank
     };
 
+    // Find highest power character for leaderboard
     const highestChar = Object.values(chars).reduce((best, c) => {
       return (!best || parseInt(c.light) > parseInt(best.light)) ? c : best;
     }, null);
 
+    // Update leaderboards
     await addOrUpdatePlayer(player);
     await upsertHighestCharacter({
       bungie_name: bungieName,
@@ -316,6 +366,7 @@ async function showUser(user) {
     await loadLeaderboard();
     await loadHighestCharacterLeaderboard();
 
+    // Prepare additional profile stats
     const lastLogin =
       Object.values(chars)
         .map(c => new Date(c.dateLastPlayed))
@@ -324,6 +375,7 @@ async function showUser(user) {
     const charCount = Object.keys(chars).length;
     currentSeasonHash = profileData.Response.profile?.data?.currentSeasonHash || null;
 
+    // Calculate collections stats
     const collectibles = profileData.Response.profileCollectibles?.data?.collectibles || {};
     let collectedCount = 0;
     let totalCount = 0;
@@ -332,12 +384,14 @@ async function showUser(user) {
       if ((info.state & 1) === 0) collectedCount++;
     }
 
+    // Fetch character progression data (optional)
     const charProgRes = await fetch(
       `https://www.bungie.net/Platform/Destiny2/${membershipType}/Profile/${membershipId}/Character/0/?components=900`,
       { headers: { 'X-API-Key': API_KEY } }
     );
     const charProgData = await charProgRes.json();
 
+    // Build HTML for character details
     const characterDetailsHTML = Object.entries(chars)
       .map(([_, char]) => {
         const emblemUrl = `https://www.bungie.net${char.emblemBackgroundPath}`;
@@ -375,6 +429,7 @@ async function showUser(user) {
       })
       .join('');
 
+    // Render user card with all stats
     results.innerHTML = '';
     const userCard = document.createElement('div');
     userCard.classList.add('user-card');
@@ -402,6 +457,7 @@ async function showUser(user) {
     `;
     results.appendChild(userCard);
 
+    // Download button for raw profile data
     document.getElementById('downloadRawBtn').addEventListener('click', () => {
       const fullData = { user, profile: profileData, characterProgressions: charProgData };
       const blob = new Blob([JSON.stringify(fullData, null, 2)], { type: 'text/plain' });
@@ -417,7 +473,10 @@ async function showUser(user) {
   }
 }
 
-// Add this function to read the name from the URL
+// ---------------------------------------------
+// Utility: Get URL Parameter
+// ---------------------------------------------
+// Reads a query parameter from the current page URL.
 function getParameterByName(name, url = window.location.href) {
   name = name.replace(/[\[\]]/g, '\\$&');
   var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
@@ -427,7 +486,10 @@ function getParameterByName(name, url = window.location.href) {
   return decodeURIComponent(results[2].replace(/\+/g, ' '));
 }
 
-// Call handleSearch on page load if the 'name' parameter is present
+// ---------------------------------------------
+// Auto-Search on Page Load
+// ---------------------------------------------
+// If the URL contains a ?name= parameter, automatically search for that player.
 window.addEventListener('load', () => {
   const name = getParameterByName('name');
   if (name) {

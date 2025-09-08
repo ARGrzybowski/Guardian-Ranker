@@ -36,10 +36,6 @@ h1 {
   width: 100%;
 }
 
-input[type="text"] {
-  /* Removed duplicate styles, input is #nameInput */
-  /* If there are other text inputs, you can adjust here */
-}
 
 /* Search button */
 #searchBtn {

@@ -25,7 +25,7 @@ function highlightAndScroll(tableId, playerName, toggleBtnId) {
     }
   }
 
-  // If not found, try expanding ("Show More") and search again
+  // If not found, expand and search again
   if (!found && toggleBtnId) {
     const toggleBtn = document.getElementById(toggleBtnId);
     if (toggleBtn && toggleBtn.textContent.includes("Show More")) {
@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       lastSearchedPlayer = playerName;
 
-      // Try all three leaderboards (will auto-expand if needed)
+      // Try all leaderboards
       const found1 = highlightAndScroll("leaderboard-body", playerName, "toggleLeaderboardBtn");
       const found2 = highlightAndScroll("guardian-rank-body", playerName, "toggleGuardianRankBtn");
       const found3 = highlightAndScroll("highest-character-body", playerName, "toggleHighestCharacterBtn");

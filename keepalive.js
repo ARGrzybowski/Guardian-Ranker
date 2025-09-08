@@ -11,7 +11,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function keepAlive() {
   try {
-    // Query a harmless row just to keep DB alive
+    // Query a harmless row just to keep DB from being considered inactive
     const { data, error } = await supabase
       .from("leaderboard")
       .select("bungie_name")
