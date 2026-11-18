@@ -2,7 +2,7 @@
 // Run by GitHub Actions only; local tests use entirely mocked responses.
 import assert from 'node:assert/strict';
 import { searchExactName, loadPlayerProfile } from '../bungieApi.js';
-import { REPORT_COMPONENTS, overviewStats, createReportApi, careerGroups, collectionEntries, recordEntries } from '../reportData.js';
+import { REPORT_COMPONENTS, overviewStats, createReportApi, careerGroups, collectionEntries, recordEntries, catalogueEntries } from '../reportData.js';
 import { createManifestClient } from '../manifest.js';
 
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Live verification runs in GitHub Actions, not on your machine.');
@@ -34,11 +34,22 @@ try {
     const match = await api.match(firstActivity.activityDetails.instanceId, signal);
     assert.ok(Array.isArray(match.entries), 'Match report entries schema');
   }
+  const catalogueCoverage = {};
+  for (const [section, type] of [['records', 'DestinyRecordDefinition'], ['collections', 'DestinyCollectibleDefinition'], ['metrics', 'DestinyMetricDefinition'], ['progression', 'DestinyProgressionDefinition']]) {
+    const definitions = await manifest.table(type, signal);
+    assert.ok(Object.keys(definitions).length > 0, `${section} catalogue`);
+    if (section === 'records' || section === 'collections') {
+      const entries = catalogueEntries(profile, section, definitions);
+      const named = entries.filter(e => !e.name.startsWith('Unknown ')).length;
+      assert.ok(named > 0, `${section} names resolved`);
+      catalogueCoverage[section] = { exposed: entries.length, named };
+    }
+  }
   console.log(JSON.stringify({
     account: 'Hawk#7753', characters: Object.keys(profile.characters.data).length,
     careerGroups: Object.keys(careerGroups(career)), historyRows: history.activities?.length || 0,
     equipmentVisible: Boolean(gear), records: recordEntries(profile).length,
     collectibles: collectionEntries(profile).length,
-    progressionVisible: Boolean(profile.characterProgressions?.data), metricsVisible: Boolean(profile.metrics?.data)
+    progressionVisible: Boolean(profile.characterProgressions?.data), metricsVisible: Boolean(profile.metrics?.data), catalogueCoverage
   }));
 } finally { clearTimeout(timeout); }
