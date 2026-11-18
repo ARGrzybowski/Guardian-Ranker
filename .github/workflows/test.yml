@@ -35,6 +35,12 @@ jobs:
           node-version: '24'
           package-manager-cache: false
       - run: node --test tests/*.test.js
+      - name: Verify player dossier in a browser with mocked APIs
+        env:
+          BROWSER_PATH: /usr/bin/google-chrome
+        run: node tests/browser-smoke.mjs
+      - name: Verify public Bungie response schemas from the cloud
+        run: node tests/live-report-check.mjs
       - name: Verify migration and database permissions in disposable PostgreSQL
         env:
           PGHOST: 127.0.0.1

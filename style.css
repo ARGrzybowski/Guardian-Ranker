@@ -483,3 +483,97 @@ ul#suggestions li:hover {
   color: #dbdbdb; /* gold highlight */
   margin-left: 2px;
 }
+
+/* Player dossier */
+:root { color-scheme: dark; --report-border: #38414e; --report-muted: #b7c1cd; --report-accent: #a9efce; }
+.main-container { max-width: 1600px; margin: 0 auto; }
+.site-intro { max-width: 760px; color: var(--report-muted); line-height: 1.6; }
+.results-container { align-items: flex-start; }
+#results.player-report { flex: 1 0 100%; max-width: none; min-width: 0; background: #19212c; border: 1px solid var(--report-border); padding: clamp(16px, 3vw, 32px); margin: 16px 0 8px; }
+.report-empty { padding: 30px 0; max-width: 760px; }
+.report-empty h2 { font-size: clamp(1.7rem, 4vw, 2.7rem); }
+.eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .16em; color: var(--report-accent); margin: 0 0 10px; }
+.report-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+.report-header .bungie-name { font-size: clamp(1.7rem, 4vw, 2.7rem); }
+.report-note, .share-status { color: var(--report-muted); font-size: .87rem; line-height: 1.65; overflow-wrap: anywhere; }
+.share-status:empty { display: none; }
+.report-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.player-report button, .player-report #downloadRawBtn { font: inherit; font-size: .85rem; color: #eef5fb; border: 1px solid #4c596a; background: #283747; border-radius: 6px; padding: 9px 13px; cursor: pointer; }
+.player-report button:hover { background: #354c60; border-color: #a9efce; }
+.player-report button:disabled { opacity: .55; cursor: wait; }
+.player-report :focus-visible { outline: 2px solid var(--report-accent); outline-offset: 3px; }
+.player-report a { color: var(--report-accent); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.report-nav { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--report-border); border-bottom: 1px solid var(--report-border); padding: 16px 0; margin: 20px 0 26px; }
+.report-nav button[aria-pressed=true] { background: #a9efce; color: #12271e; border-color: #a9efce; font-weight: 700; }
+.report-panel[hidden] { display: none; }
+.report-panel h3 { font-size: 1.4rem; margin: 0 0 18px; color: #f2f7fc; }
+.report-panel h4 { font-size: 1.05rem; margin: 8px 0 12px; }
+.report-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin: 0 0 30px; }
+.report-stat { background: #111923; padding: 17px; border: 1px solid #303d4b; border-radius: 7px; min-width: 0; }
+.report-stat dt { color: var(--report-muted); font-size: .77rem; margin-bottom: 10px; line-height: 1.4; }
+.report-stat dd { color: #fff; font-size: 1.5rem; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
+.report-stats.compact { grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 8px; }
+.compact .report-stat { padding: 12px; }
+.compact .report-stat dd { font-size: 1.15rem; }
+.report-character-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; margin-bottom: 26px; }
+.character-preview { position: relative; background: #111923; border-radius: 8px; overflow: hidden; border: 1px solid var(--report-border); }
+.character-preview > img { width: 100%; height: 90px; object-fit: cover; display: block; }
+.character-preview > div { padding: 16px; }
+.character-preview p { font-size: .82rem; color: var(--report-muted); }
+.power-value { color: #f5e893; }
+.clan-summary { padding: 24px 0; border-top: 1px solid var(--report-border); }
+.clan-card p { line-height: 1.6; }
+.report-details { padding: 20px 0; border-top: 1px solid var(--report-border); }
+.player-report summary { cursor: pointer; color: var(--report-accent); line-height: 1.5; }
+.player-report details p { line-height: 1.6; font-size: .85rem; }
+.preserve-lines { white-space: pre-wrap; }
+.character-detail { margin: 20px 0 35px; border-bottom: 1px solid var(--report-border); padding-bottom: 25px; }
+.title-name { color: #d4b4f1; font-weight: 600; }
+.gear-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 10px; }
+.gear-item, .catalogue-item { display: flex; align-items: flex-start; gap: 12px; border: 1px solid var(--report-border); background: #111923; border-radius: 7px; padding: 14px; min-width: 0; }
+.gear-item > div, .catalogue-item > div { min-width: 0; }
+.item-icon { width: 48px; height: 48px; object-fit: contain; border-radius: 4px; flex: 0 0 48px; }
+.gear-item h5 { font-size: .95rem; margin: 0 0 6px; overflow-wrap: anywhere; }
+.gear-item p, .catalogue-item p { font-size: .82rem; color: var(--report-muted); line-height: 1.6; }
+.exotic-item { border-color: #9f8f52; }
+.gear-perks { margin-top: 8px; }
+.career-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 20px; }
+.career-card { border: 1px solid var(--report-border); padding: 20px; margin-bottom: 20px; border-radius: 7px; min-width: 0; }
+.report-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 20px 0; }
+.report-filters label, .metrics-label { display: flex; flex-direction: column; gap: 8px; font-size: .8rem; color: var(--report-muted); }
+.player-report input, .player-report select { padding: 10px; background: #111923; color: #fff; border: 1px solid #4c596a; border-radius: 5px; font: inherit; max-width: 100%; box-sizing: border-box; }
+.report-table-wrap { max-width: 100%; overflow-x: auto; margin: 15px 0; }
+.report-table { border-collapse: collapse; width: 100%; font-size: .83rem; line-height: 1.5; }
+.report-table th { color: #cad8e6; font-size: .75rem; text-align: left; background: #233242; }
+.report-table td, .report-table th { padding: 12px; border-bottom: 1px solid var(--report-border); }
+.report-table td { min-width: 65px; }
+.report-table tr:nth-child(even) { background: #141e29; }
+.match-result { margin-top: 25px; }
+.catalogue-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px; margin: 20px 0; }
+.catalogue-item h4 { font-size: .95rem; }
+.report-badge { display: inline-block; background: #353841; color: #d8dce3; font-size: .7rem; padding: 4px 7px; border-radius: 4px; }
+.report-badge.complete { background: #1d4336; color: #b8f5d8; }
+.metrics-label { max-width: 380px; margin-bottom: 20px; }
+.queue-status { margin-bottom: 0; padding-top: 20px; border-top: 1px solid var(--report-border); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 600px) {
+  .report-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-stat { padding: 12px; }
+  .report-stat dd { font-size: 1.15rem; }
+  .report-header { gap: 8px; }
+  .report-nav button { padding: 9px; font-size: .77rem; }
+  .report-filters label { flex: 1 1 130px; min-width: 0; }
+  .career-card { padding: 12px; }
+}
+@media print {
+  body { background: white; color: black; }
+  .main-container > h1, .site-intro, .search-container, #suggestions, .report-nav, .report-actions, .queue-status, .results-container > :not(#results) { display: none !important; }
+  #results.player-report, .report-stat, .career-card, .gear-item, .catalogue-item, .report-table tr { background: white; color: black; border-color: #ccc; }
+  .report-panel:not(:empty)[hidden] { display: block; }
+  .player-report button, .report-filters { display: none; }
+  .player-report h2, .player-report h3, .player-report h4, .player-report h5, .report-stat dd { color: black; }
+  .report-note, .report-stat dt, .gear-item p, .catalogue-item p { color: #333; }
+  .report-panel { break-before: auto; margin: 25px 0; }
+  .report-table-wrap { overflow: visible; }
+  .report-stat, .gear-item, .catalogue-item { break-inside: avoid; }
+}

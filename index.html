@@ -10,7 +10,7 @@
 <body>
   <div class="main-container">
     <h1>Guardian Ranker</h1>
-    <p>Enter Bungie.net Username</p>
+    <p class="site-intro">Your complete public Destiny 2 player dossier. Search a Guardian to explore their career, gear, triumphs, and activities.</p>
 
     <div class="search-container">
       <input type="text" id="nameInput" placeholder="Guardian#1234" autocomplete="off" aria-label="Bungie name" />
@@ -21,13 +21,8 @@
 
     <div class="results-container">
       <!-- Left Side: Player Card -->
-      <div id="results" class="user-card" style="flex: 1 1 400px;">
-        <!-- PvP / PvE Buttons (Future feature)-->
-<div id="modeButtons" style="display: none; margin-top: 20px; text-align: center;">
-  <a id="pvpBtn" class="mode-btn red-btn" href="#">PvP Stats</a>
-  <a id="pveBtn" class="mode-btn blue-btn" href="#">PvE Stats</a>
-</div>
-
+      <div id="results" class="user-card player-report">
+        <div class="report-empty"><p class="eyebrow">KNOW YOUR GUARDIAN</p><h2>A career worth exploring.</h2><p>Enter a full Bungie name, such as Hawk#7753, to open a detailed report.</p><p class="report-note">Character loadouts · PvP & PvE · Match history · Triumphs & titles · Collections · Clan & progression</p></div>
       </div>
 
       <!-- Middle: Leaderboards -->
