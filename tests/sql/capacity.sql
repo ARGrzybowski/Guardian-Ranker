@@ -17,6 +17,8 @@ select pg_temp.assert_capacity(exists(select 1 from public.get_guardians_due(now
 select pg_temp.assert_capacity((select count(distinct g->>'membership_id')=8 from public.get_guardians_due(now(),8)g),'no account appears in two lanes');
 select public.save_guardian_snapshot('1',jsonb_build_object('membership_id','1','membership_type',3,'bungie_name','Leader1#1234','identity_checked_at',now(),'character_id','123'),now()+interval '1 hour');
 select pg_temp.assert_capacity((select identity_checked_at is not null and character_id='123' from public.guardian_index where membership_id='1'),'identity cache and activity character persist');
+select public.promote_guardian_leaders();
+select pg_temp.assert_capacity((select next_refresh_at<=last_refreshed_at+interval '15 minutes' from public.guardian_index where membership_id='1'),'new leaders inherit the fast refresh cadence');
 reset role;
 set role anon;
 select public.enqueue_guardian('1',3);

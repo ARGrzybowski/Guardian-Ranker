@@ -44,7 +44,7 @@ delay actual refreshes; the website shows the latest profile-refresh timestamp.
 1. Apply the base migration in
    `supabase/migrations/202611180001_guardian_index.sql` once. It seeds identities
    from the old leaderboard without trusting browser-submitted scores.
-2. Apply `supabase/indexer-capacity.sql` once, then `supabase/cloud-schedule.sql` once using Supabase migration tools. This
+2. Apply `supabase/indexer-capacity.sql`, `supabase/leader-refresh.sql`, then `supabase/cloud-schedule.sql` once using Supabase migration tools. This
    enables pg_cron/pg_net, generates the private invocation token, and creates an
    initially disabled scheduled job.
 3. Deploy `supabase/functions/guardian-indexer/index.ts` with its relative
