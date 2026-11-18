@@ -51,6 +51,14 @@ create table public.guardian_index_lease (
   expires_at timestamptz
 );
 insert into public.guardian_index_lease(singleton) values (true);
+create table public.guardian_index_metrics (
+  singleton boolean primary key default true check (singleton),
+  tracked_count bigint not null default 0,
+  indexed_count bigint not null default 0,
+  last_refreshed_at timestamptz,
+  last_run_at timestamptz
+);
+insert into public.guardian_index_metrics(singleton) values (true);
 
 -- Bootstrap from previously searched identities, never from client-submitted scores.
 insert into public.guardian_index(membership_id, bungie_name, source)
@@ -62,21 +70,28 @@ alter table public.guardian_index enable row level security;
 alter table public.guardian_index_clans enable row level security;
 alter table public.guardian_index_runs enable row level security;
 alter table public.guardian_index_lease enable row level security;
+alter table public.guardian_index_metrics enable row level security;
+create policy public_index_metrics on public.guardian_index_metrics for select to anon, authenticated using (true);
+create policy public_index_snapshots on public.guardian_index for select to anon, authenticated
+using (profile_status = 'public' and canonical_membership_id is null and last_refreshed_at is not null);
 revoke all on public.guardian_index, public.guardian_index_clans, public.guardian_index_runs, public.guardian_index_lease from public, anon, authenticated;
 grant all on public.guardian_index, public.guardian_index_clans, public.guardian_index_runs, public.guardian_index_lease to service_role;
+revoke all on public.guardian_index_metrics from public, anon, authenticated;
+grant select on public.guardian_index_metrics to anon, authenticated;
+grant all on public.guardian_index_metrics to service_role;
+grant select(membership_id, bungie_name, time_played_hours, triumph_score, guardian_rank,
+  highest_guardian_rank, class_type, light_level, last_refreshed_at, profile_status, canonical_membership_id)
+on public.guardian_index to anon, authenticated;
 
 -- These views deliberately expose only public snapshots and aggregate counts.
-create view public.guardian_rankings as
+create view public.guardian_rankings with (security_invoker = true) as
 select membership_id, bungie_name, time_played_hours, triumph_score, guardian_rank,
        highest_guardian_rank, class_type, light_level, last_refreshed_at
 from public.guardian_index
 where profile_status = 'public' and canonical_membership_id is null and last_refreshed_at is not null;
-create view public.guardian_index_status as
-select
-  (select count(*) from public.guardian_index where canonical_membership_id is null) as tracked_count,
-  (select count(*) from public.guardian_rankings) as indexed_count,
-  (select max(last_refreshed_at) from public.guardian_rankings) as last_refreshed_at,
-  (select max(completed_at) from public.guardian_index_runs where status in ('completed','budget_reached','partial')) as last_run_at;
+create view public.guardian_index_status with (security_invoker = true) as
+select tracked_count, indexed_count, last_refreshed_at, last_run_at from public.guardian_index_metrics where singleton;
+update public.guardian_index_metrics set tracked_count = (select count(*) from public.guardian_index) where singleton;
 revoke all on public.guardian_rankings, public.guardian_index_status from public, anon, authenticated;
 grant select on public.guardian_rankings, public.guardian_index_status to anon, authenticated, service_role;
 
@@ -94,6 +109,7 @@ begin
   if (select count(*) from public.guardian_index where source = 'search' and discovered_at >= now() - interval '1 hour') >= 100 then return false; end if;
   insert into public.guardian_index(membership_id, membership_type, source)
   values (p_membership_id, p_membership_type, 'search');
+  update public.guardian_index_metrics set tracked_count = tracked_count + 1 where singleton;
   return true;
 end;
 $$;
@@ -116,6 +132,12 @@ returns void language plpgsql security definer set search_path = '' as $$
 begin
   update public.guardian_index_runs set completed_at = now(), status = p_status, summary = p_summary
   where id = p_run_id and status = 'running';
+  update public.guardian_index_metrics set
+    tracked_count = (select count(*) from public.guardian_index where canonical_membership_id is null),
+    indexed_count = (select count(*) from public.guardian_rankings),
+    last_refreshed_at = (select max(last_refreshed_at) from public.guardian_rankings),
+    last_run_at = case when p_status in ('completed','partial','budget_reached') then now() else last_run_at end
+  where singleton;
   update public.guardian_index_lease set owner = null, expires_at = null where singleton and owner = p_run_id;
 end;
 $$;

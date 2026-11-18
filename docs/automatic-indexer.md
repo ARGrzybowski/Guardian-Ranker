@@ -1,117 +1,99 @@
 # Automatic Guardian indexing
 
-This first version discovers clans from tracked accounts, imports every roster page,
-and refreshes public profiles on GitHub-hosted runners. Your computer does not host
-the worker, database, scheduler, or queue and can be switched off.
+The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase
+Cron** every 15 minutes. Your computer can be switched off. No local scheduler,
+service, or persistent process is required.
 
-The operational entry point refuses to run outside GitHub Actions. Tests use
-in-memory accounts and mocked APIs; they do not index live players.
+## Cloud architecture
 
-## What runs in the cloud
+- Supabase stores discovered identities, trusted profile snapshots, clan page
+  cursors, run summaries, a worker lease, and aggregate coverage.
+- The worker discovers clans from tracked accounts, imports every roster page,
+  and refreshes public profiles independently of website searches.
+- A protected Edge Function processes small batches: up to 15 profile attempts,
+  five clan lookups, three roster pages, and 60 logical Bungie operations per run.
+  A 100-second deadline leaves cleanup time within the free-plan runtime limit.
+- Supabase Cron invokes the function every 15 minutes. A random invocation token
+  stays in the restricted lease table and is never returned to browser clients.
+  The function authenticates this token itself before doing any indexing.
+- The Edge runtime uses its built-in server credentials. No private Supabase key
+  needs to be copied into GitHub or provided in chat.
+- GitHub Pages serves the frontend. Searches enqueue identities, never scores.
 
-- GitHub Actions invokes `worker/run.mjs` every six hours at minute 17, and supports a manual run.
-- Supabase stores discovered identities, profile snapshots, clan page cursors, run summaries, and a worker lease.
-- GitHub Pages serves the existing website. Browsers read verified ranking snapshots and may queue an identity, but cannot submit scores.
-- An eight-minute worker deadline, ten-minute job timeout, operation budget, and request spacing bound each run. GitHub concurrency and a database lease prevent overlapping workers.
+Each run refreshes older due accounts first, discovers their clans, imports roster
+pages, then uses any remaining profile budget on newly discovered members.
+Rosters checkpoint after every page. Duplicate discoveries do not reset due times.
+The next run resumes unfinished work, including after operation limits or failures.
 
-Each run resolves configured seed accounts, refreshes due accounts, discovers their
-clans, imports roster pages, then uses any remaining profile budget to refresh new
-members immediately. It handles up to 100 profile attempts, 25 clan lookups, 20
-roster pages, and 300 logical Bungie operations per run. Transient HTTP retries are
-separately bounded by the shared Bungie client. The next run resumes unfinished work.
+Active profiles become due after six hours; accounts not played in seven days
+become due after 48 hours. Failed profiles back off between six and 48 hours.
+Clans are rediscovered and rescanned daily. Scheduling and service availability can
+delay actual refreshes; the website shows the latest profile-refresh timestamp.
 
-Active accounts are due after six hours; accounts not played in seven days are due
-after 48 hours. Failed profiles back off between six and 48 hours. Clan membership
-and roster scans are due daily. GitHub can delay or disable schedules after extended
-repository inactivity, so these are targets rather than freshness guarantees.
+## Deployment order
 
-## One-time activation
+1. Apply the base migration in
+   `supabase/migrations/202611180001_guardian_index.sql` once. It seeds identities
+   from the old leaderboard without trusting browser-submitted scores.
+2. Apply `supabase/cloud-schedule.sql` once using Supabase migration tools. This
+   enables pg_cron/pg_net, generates the private invocation token, and creates an
+   initially disabled scheduled job.
+3. Deploy `supabase/functions/guardian-indexer/index.ts` with its relative
+   dependencies and `verify_jwt=false`. Its own invocation-token authentication
+   protects it; an anonymous request must return HTTP 401.
+4. Trigger `select guardian_private.invoke_guardian_indexer();` from an authorized
+   SQL session. Check the run summary, HTTP result, and indexed-account count.
+5. Enable the job with
+   `select cron.alter_job((select jobid from cron.job where jobname='guardian-indexer'), active := true);`
+6. Merge the frontend changes into main and confirm GitHub Pages deployment.
 
-1. In the Supabase project SQL editor, apply
-   [`202611180001_guardian_index.sql`](../supabase/migrations/202611180001_guardian_index.sql)
-   **once**. It seeds identities from the existing `leaderboard` table, creates the
-   worker tables, views, and RPCs, and removes public score-writing privileges.
-   Existing score rows remain in their original tables; only fresh Bungie-verified
-   snapshots appear in the new rankings.
+Deployment through the connected Supabase tools records applied migrations in the
+hosted project's migration history. No live indexer command should run locally.
 
-2. In [the repository's Actions secrets settings](https://github.com/ARGrzybowski/Guardian-Ranker/settings/secrets/actions), add:
+## Public data and permissions
 
-   | Secret | Value |
-   | --- | --- |
-   | `SUPABASE_SERVICE_ROLE_KEY` | A Supabase server secret (`sb_secret_...`) or legacy `service_role` key from the project API keys page. The public `anon` key in `database.js` will be rejected. |
-   | `BUNGIE_API_KEY` | The Bungie application's API key. |
+The queue RPC accepts only a membership ID and type. It has no display-name or score
+arguments. Duplicate requests are idempotent, and a serialized global cap admits
+at most 100 new search-origin identities per hour. Trusted clan discovery is not
+subject to this public admission cap.
 
-   Keep the server key in GitHub secrets only. Do not commit it, add it to browser
-   code, or paste it into chat. The worker never prints credentials or raw HTTP error bodies.
+RLS restricts public reads of the backing index to verified public snapshot rows
+and explicit display columns; internal queue fields remain inaccessible. The
+ranking and status views use `security_invoker=true`, and browser roles have
+SELECT-only access. Coverage metrics live in a separate public-read-only summary.
 
-3. Merge the implementation into `main`. Scheduled workflows only run from the
-   default branch. In [Actions variables](https://github.com/ARGrzybowski/Guardian-Ranker/settings/variables/actions), configure:
+Private profiles leave public rankings without erasing their cached snapshot.
+Transient errors retain the previous snapshot and its original timestamp. Missing
+individual metrics preserve earlier known values, so an individual metric's age
+can differ from the overall profile-refresh time.
 
-   | Variable | Value |
-   | --- | --- |
-   | `INDEXER_ENABLED` | `true` when the migration and secrets are ready; otherwise leave unset. |
-   | `SUPABASE_URL` | Optional; defaults to this project's existing Supabase URL. |
-   | `INDEXER_SEED_NAMES` | Optional comma-separated full names; defaults to `Hawk#7753`, the account verified while fixing search. At most 20. |
-   | `INDEXER_SEED_CLANS` | Optional comma-separated numeric clan IDs. At most 20. This can bootstrap a community with no prior searches. |
-
-4. Open **Actions → Refresh Guardian index → Run workflow**, choose `main`, and run
-   it. No local command, Task Scheduler task, Windows service, or always-on machine
-   is needed. A skipped job means `INDEXER_ENABLED` is unset/false or the selected
-   branch is not `main`.
-
-5. Confirm the run summary and the website's indexed-account count. A clan roster
-   imports players who have never visited the site. A large initial backlog may
-   take multiple runs; account searches do not jump ahead of older due work.
-
-The frontend supports a safe rollout: before the migration exists, it shows the old
-read-only leaderboards with an explicit "not enabled yet" message. Profile search
-still works. After the migration, rankings may start empty while the worker verifies
-the queue. Do not enable the workflow before configuring the secrets and migration.
-
-## Data trust and privacy
-
-Public callers can invoke `enqueue_guardian(membership_id, membership_type)` only.
-There are no score or display-name arguments. Duplicate requests do not reset due
-times. A serialized global cap admits at most 100 new search-origin identities per
-hour; service-side clan discovery is independent of that cap.
-
-Worker tables have row-level security and no browser-role access. The public
-`guardian_rankings` view exposes verified public snapshots only. The aggregate
-`guardian_index_status` view exposes coverage and freshness without queue details.
-The public roles have SELECT-only access to these views, even in projects whose
-default grants allow writes to new tables.
-
-The worker resolves cross-save aliases before saving snapshots. Accounts with no
-public characters are removed from public rankings without erasing the cached
-snapshot. Transient Bungie errors retain the last known snapshot and its original
-refresh time. Missing individual metrics preserve earlier known values; their
-latest availability may differ from the overall profile refresh timestamp.
-
-These are rankings **among tracked Guardians**, not an exhaustive census of Destiny
-players. Activity-based discovery through match reports is a later expansion, not
-part of this first version.
+Before the migration exists, the frontend labels the old read-only rankings as
+previously searched players. After migration, rankings may briefly be empty while
+the initial queue is verified. These are rankings among **tracked Guardians**,
+not an exhaustive global census. Activity-report discovery is a later stage.
 
 ## Monitoring and stopping
 
-`guardian_index_runs` records status (`completed`, `partial`, `budget_reached`, or
-`failed`) and counts of refreshes, roster pages, and errors. A partial run can include
-private accounts or failed seeds; inspect repeated errors before assuming the queue
-is healthy. A budget-limited run is expected to leave work for the next invocation.
+Inspect `guardian_index_runs` for completed, partial, budget_reached, or failed
+runs. Inspect `guardian_index_clans.next_page` for roster progress.
+`guardian_index_status` provides aggregate coverage without exposing queue details.
 
-`guardian_index_clans.next_page` is the saved roster cursor. Public scores and the
-worker lease update transactionally through server-only functions. If a job is
-terminated, its lease expires after 20 minutes.
+Disable the cron job to stop future runs:
+`select cron.alter_job((select jobid from cron.job where jobname='guardian-indexer'), active := false);`
+A terminated run's lease expires after 20 minutes. Existing scores remain readable.
 
-To stop future indexing, set `INDEXER_ENABLED` to `false` or disable the workflow.
-Cancel an already-running job separately. Existing ranking snapshots remain readable.
+## Optional GitHub-hosted alternative
+
+`.github/workflows/index-guardians.yml` remains available for a GitHub-hosted runner.
+It stays disabled unless `INDEXER_ENABLED=true` is explicitly configured. Do not
+enable it while Supabase Cron is active. This alternative requires GitHub secrets
+`SUPABASE_SERVICE_ROLE_KEY` and `BUNGIE_API_KEY`. The operational Node entry point
+refuses to run outside GitHub Actions.
 
 ## Verification
 
-```text
-node --test tests/*.test.js
-node tests/browser-smoke.mjs
-```
-
-The pull-request CI also applies the migration to a disposable PostgreSQL 16 service
-and verifies public permissions, admission limits, canonical snapshots, and leases.
-It uses test-only credentials and never contacts the production Supabase database.
+`node --test tests/*.test.js` runs mocked regression tests, including worker
+authentication and batching. `node tests/browser-smoke.mjs` checks the frontend
+against mocked APIs. PR CI applies the base migration to disposable PostgreSQL
+and verifies permissions, admission limits, canonical snapshots, and worker leases.
+No local test indexes live players or contacts production Supabase.
