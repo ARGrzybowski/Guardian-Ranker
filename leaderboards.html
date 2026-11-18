@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>All Leaderboards</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -15,8 +16,8 @@
 
     <!-- Search Bar -->
     <div class="search-container">
-      <input type="text" id="leaderboardSearch" placeholder="Guardian#1234" autocomplete="on" />
-      <button id="leaderboardSearchBtn" title="Search">➤</button>
+      <input type="text" id="leaderboardSearch" placeholder="Guardian#1234" autocomplete="off" aria-label="Bungie name" />
+      <button id="leaderboardSearchBtn" title="Search" aria-label="Find guardian in leaderboards">➤</button>
     </div>
 
     <!-- Results -->
@@ -90,14 +91,10 @@
         <button id="toggleGuardianRankBtn">Show More</button>
       </section>
     </div>
-  </div>
-
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="leaderboard.js"></script>
-  <script type="module" src="highestCharacter.js"></script>
   <script type="module" src="leaderboardSearch.js"></script>
-  <script type="module" src="timePlayed.js"></script>
 
 </body>
 </html>

@@ -90,6 +90,21 @@ ul#suggestions li:hover {
   background-color: #333333;
 }
 
+.suggestion-button {
+  width: 100%;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggestion-button:focus-visible {
+  outline: 2px solid #90ee90;
+}
+
 /* User card styling */
 .user-card {
   background-color: #282828;

@@ -7,6 +7,8 @@ const searchBtn = document.getElementById('searchBtn');
 let timeoutId = null;
 let seasonData = null;
 let currentSeasonHash = null;
+let weeklyResetInterval = null;
+let seasonLoadFinished = false;
 
 function toManifestKey(hash) {
   return typeof hash === 'number' ? (hash >>> 0).toString() : String(hash);
@@ -25,8 +27,7 @@ function toManifestKey(hash) {
 
     const seasonDefPath = manifest?.Response?.jsonWorldComponentContentPaths?.en?.DestinySeasonDefinition;
     if (!seasonDefPath) {
-      console.error('[initSeasonData] No seasonDefPath found in manifest!');
-      return;
+      throw new Error('Season definitions unavailable.');
     }
     console.log('[initSeasonData] Season definition path:', seasonDefPath);
 
@@ -53,9 +54,11 @@ function toManifestKey(hash) {
       console.warn('[initSeasonData] No currentSeasonHash found in settings.');
     }
 
+    seasonLoadFinished = true;
     renderGlobalGameStats(currentSeasonHash);
   } catch (err) {
     console.error('[initSeasonData] Failed to fetch season data or settings:', err);
+    seasonLoadFinished = true;
     renderGlobalGameStats(null);
   }
 })();
@@ -97,6 +100,7 @@ function getSeasonInfo(seasonHash) {
 }
 
 function startWeeklyResetCountdown() {
+  clearInterval(weeklyResetInterval);
   const timerEl = document.getElementById('weekly-reset-timer');
   if (!timerEl) return;
 
@@ -106,7 +110,7 @@ function startWeeklyResetCountdown() {
   }
 
   update();
-  setInterval(update, 60000); // update every minute
+  weeklyResetInterval = setInterval(update, 60000); // update every minute
 }
 
 function getNextWeeklyReset() {
@@ -166,7 +170,7 @@ function renderGlobalGameStats(seasonHash) {
       <div class="stat-group">
         <div class="stat-label">Season</div>
         <div class="stat-value season-info">
-          <span>Loading season information...</span>
+          <span>${seasonLoadFinished ? 'Season information unavailable.' : 'Loading season information...'}</span>
         </div>
       </div>
       ${weeklyBlock}
@@ -222,6 +226,3 @@ function attachDebugDownload() {
     URL.revokeObjectURL(url);
   });
 }
-
-// Initial render
-renderGlobalGameStats(currentSeasonHash);

@@ -1,83 +1,41 @@
-// leaderboardSearch.js
-
+const tables = [
+  ['leaderboard-body', 'toggleLeaderboardBtn'],
+  ['guardian-rank-body', 'toggleGuardianRankBtn'],
+  ['highest-character-body', 'toggleHighestCharacterBtn'],
+  ['time-played-body', 'toggleTimePlayedBtn']
+];
 let lastSearchedPlayer = null;
 
-function highlightAndScroll(tableId, playerName, toggleBtnId) {
-  const tbody = document.getElementById(tableId);
-  const rows = tbody?.getElementsByTagName("tr") || [];
-  let found = false;
-
-  for (let row of rows) {
-    const nameCell = row.cells[1]; // Bungie Name is always the 2nd column
-    if (nameCell && nameCell.textContent.trim().toLowerCase() === playerName.toLowerCase()) {
-      // Reset highlights in this table
-      Array.from(rows).forEach(r => r.classList.remove("highlight"));
-
-      // Highlight the row
-      row.classList.add("highlight");
-
-      // Scroll to it
-      if (!found) {
-        row.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-
-      found = true;
+function highlightMatches(expand = false) {
+  let firstMatch;
+  for (const [tableId, buttonId] of tables) {
+    const tbody = document.getElementById(tableId);
+    const rows = Array.from(tbody?.querySelectorAll('tr') || []);
+    let found = false;
+    for (const row of rows) {
+      const matches = Boolean(lastSearchedPlayer && row.cells[1]?.textContent.trim().toLowerCase() === lastSearchedPlayer.toLowerCase());
+      row.classList.toggle('highlight', matches);
+      if (matches) { found = true; firstMatch ??= row; }
     }
+    const button = document.getElementById(buttonId);
+    if (expand && !found && button?.getAttribute('aria-expanded') === 'false') button.click();
   }
-
-  // If not found, expand and search again
-  if (!found && toggleBtnId) {
-    const toggleBtn = document.getElementById(toggleBtnId);
-    if (toggleBtn && toggleBtn.textContent.includes("Show More")) {
-      toggleBtn.click(); // expand the table
-      setTimeout(() => highlightAndScroll(tableId, playerName, null), 300);
-      // retry once after expanding
-    }
-  }
-
-  return found;
+  return firstMatch;
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  const searchBtn = document.getElementById("leaderboardSearchBtn");
-  const input = document.getElementById("leaderboardSearch");
-
-  if (searchBtn && input) {
-    searchBtn.addEventListener("click", () => {
-      const playerName = input.value.trim();
-      if (!playerName) return;
-
-      lastSearchedPlayer = playerName;
-
-      // Try all leaderboards
-      const found1 = highlightAndScroll("leaderboard-body", playerName, "toggleLeaderboardBtn");
-      const found2 = highlightAndScroll("guardian-rank-body", playerName, "toggleGuardianRankBtn");
-      const found3 = highlightAndScroll("highest-character-body", playerName, "toggleHighestCharacterBtn");
-      const found4 = highlightAndScroll("time-played-body", playerName, "toggleTimePlayedBtn");
-
-      // If none found at all
-      setTimeout(() => {
-        if (!document.querySelector(".highlight")) {
-          alert(`${playerName} not found in any leaderboard.`);
-        }
-      }, 400);
-    });
-  }
-
-  // Re-highlight after clicking any Show More / Show Less
-  ["toggleLeaderboardBtn", "toggleGuardianRankBtn", "toggleHighestCharacterBtn", "toggleTimePlayedBtn"].forEach(btnId => {
-    const btn = document.getElementById(btnId);
-    if (btn) {
-      btn.addEventListener("click", () => {
-        if (lastSearchedPlayer) {
-          setTimeout(() => {
-            highlightAndScroll("leaderboard-body", lastSearchedPlayer);
-            highlightAndScroll("guardian-rank-body", lastSearchedPlayer);
-            highlightAndScroll("highest-character-body", lastSearchedPlayer);
-            highlightAndScroll("time-played-body", lastSearchedPlayer);
-          }, 300);
-        }
-      });
-    }
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('leaderboardSearch');
+  const search = () => {
+    lastSearchedPlayer = input.value.trim();
+    highlightMatches(true);
+    const match = highlightMatches();
+    if (match) match.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    else if (lastSearchedPlayer) alert(`${lastSearchedPlayer} not found in the loaded leaderboards.`);
+  };
+  document.getElementById('leaderboardSearchBtn')?.addEventListener('click', search);
+  input?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); search(); }
   });
 });
+// Also reapply highlights when asynchronous loads or Show More replace the rows.
+document.addEventListener('leaderboards:rendered', () => highlightMatches());
