@@ -1,7 +1,7 @@
 # Automatic Guardian indexing
 
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase
-Cron** every 15 minutes. Your computer can be switched off. No local scheduler,
+Cron** every minute. Your computer can be switched off. No local scheduler,
 service, or persistent process is required.
 
 ## Cloud architecture
@@ -10,9 +10,11 @@ service, or persistent process is required.
   cursors, run summaries, a worker lease, and aggregate coverage.
 - The worker discovers clans from tracked accounts, imports every roster page,
   and refreshes public profiles independently of website searches.
-- A protected Edge Function processes small batches: up to 15 profile attempts,
-  five clan lookups, three roster pages, and 60 logical Bungie operations per run.
-  A 100-second deadline leaves cleanup time within the free-plan runtime limit.
+- A protected Edge Function processes small batches: up to 100 profile attempts with four concurrent consumers,
+  five clan lookups, three roster pages, two activity-history scans, and 240 logical
+  Bungie operations per run. One shared reservation queue paces calls at about three
+  operations per second. New work stops after 80 seconds; a 110-second hard deadline
+  leaves cleanup time within the platform runtime limit.
 - Supabase Cron invokes the function every 15 minutes. A random invocation token
   stays in the restricted lease table and is never returned to browser clients.
   The function authenticates this token itself before doing any indexing.
@@ -24,9 +26,16 @@ Each run refreshes older due accounts first, discovers their clans, imports rost
 pages, then uses any remaining profile budget on newly discovered members.
 Rosters checkpoint after every page. Duplicate discoveries do not reset due times.
 The next run resumes unfinished work, including after operation limits or failures.
+Searches can request a priority refresh, with a five-minute per-account cooldown.
+The status panel reports profiles refreshed in the last day and the due backlog,
+so a recent update to one player does not imply the entire dataset is fresh.
 
-Active profiles become due after six hours; accounts not played in seven days
-become due after 48 hours. Failed profiles back off between six and 48 hours.
+Active players (played within 24 hours) and top-100 leaders become due after 15
+minutes. Other players active within a week become due after two hours; older
+accounts become due after 24 hours. These are targets, not freshness guarantees.
+Daily identity caching avoids repeating membership resolution for every refresh.
+Half of each batch prioritizes active players, leaders, and recent searches; a
+quarter is reserved for new accounts and remaining slots process older due work. Failed profiles back off between six and 48 hours.
 Clans are rediscovered and rescanned daily. Scheduling and service availability can
 delay actual refreshes; the website shows the latest profile-refresh timestamp.
 
@@ -35,7 +44,7 @@ delay actual refreshes; the website shows the latest profile-refresh timestamp.
 1. Apply the base migration in
    `supabase/migrations/202611180001_guardian_index.sql` once. It seeds identities
    from the old leaderboard without trusting browser-submitted scores.
-2. Apply `supabase/cloud-schedule.sql` once using Supabase migration tools. This
+2. Apply `supabase/indexer-capacity.sql` once, then `supabase/cloud-schedule.sql` once using Supabase migration tools. This
    enables pg_cron/pg_net, generates the private invocation token, and creates an
    initially disabled scheduled job.
 3. Deploy `supabase/functions/guardian-indexer/index.ts` with its relative
@@ -63,14 +72,17 @@ ranking and status views use `security_invoker=true`, and browser roles have
 SELECT-only access. Coverage metrics live in a separate public-read-only summary.
 
 Private profiles leave public rankings without erasing their cached snapshot.
-Transient errors retain the previous snapshot and its original timestamp. Missing
+Transient errors retain the previous snapshot and its original timestamp.
+Persistent throttles pause all new operations and persist a cooldown across runs. Missing
 individual metrics preserve earlier known values, so an individual metric's age
 can differ from the overall profile-refresh time.
 
 Before the migration exists, the frontend labels the old read-only rankings as
 previously searched players. After migration, rankings may briefly be empty while
 the initial queue is verified. These are rankings among **tracked Guardians**,
-not an exhaustive global census. Activity-report discovery is a later stage.
+not an exhaustive global census. Recent public activity reports discover other
+participants and their clans, extending coverage beyond the initial clan network.
+Private matches are skipped and already processed reports are deduplicated.
 
 ## Monitoring and stopping
 

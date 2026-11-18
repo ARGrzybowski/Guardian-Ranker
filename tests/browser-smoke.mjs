@@ -26,7 +26,7 @@ window.supabase = { createClient: () => ({
   select: () => {
     const error = window.__indexMissing && table.startsWith('guardian_') ? { code: 'PGRST205' } : null;
     const query = { order: () => query,
-      single: async () => ({ data: { indexed_count: 8, tracked_count: 10, last_refreshed_at: '2026-11-18T12:00:00Z' }, error }),
+      single: async () => ({ data: { indexed_count: 8, tracked_count: 10, fresh_24h_count: 7, due_count: 3, last_refreshed_at: '2026-11-18T12:00:00Z' }, error }),
       range: async (start, end) => ({ data: window.__rows.slice(start, end + 1), error }) };
     return query;
   }
@@ -182,6 +182,7 @@ try {
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753' && window.__writes.length === 1");
   assert.deepEqual(await evaluate('window.__writes[0]'), { name: 'enqueue_guardian', args: { p_membership_id: 'hawk', p_membership_type: 1 } });
   assert.match(await evaluate("document.getElementById('index-status').textContent"), /8 indexed Guardians; 2 waiting/);
+  assert.match(await evaluate("document.getElementById('index-status').textContent"), /7 updated in 24 hours; 3 due/);
   assert.equal(apiCalls.filter(url => url.includes('/User/Search/')).length, 0, 'Full names never use prefix search');
   assert.equal(await evaluate("document.querySelectorAll('#results .character-section img').length"), 3);
   assert.equal(await evaluate('window.__intervals.size'), 1, 'Only one weekly-reset timer remains active');

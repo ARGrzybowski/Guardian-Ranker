@@ -110,7 +110,8 @@ export async function loadIndexStatus() {
     const count = Number(data.indexed_count);
     const queued = Math.max(0, Number(data.tracked_count) - count);
     const updated = data.last_refreshed_at ? ` Latest profile refresh: ${new Date(data.last_refreshed_at).toLocaleString()}.` : ' Waiting for the first cloud refresh.';
-    element.textContent = `${count.toLocaleString()} indexed Guardians; ${queued.toLocaleString()} waiting for a public profile. Rankings cover tracked accounts.${updated}`;
+    const freshness = data.fresh_24h_count == null ? '' : ` ${Number(data.fresh_24h_count).toLocaleString()} updated in 24 hours; ${Number(data.due_count).toLocaleString()} due for refresh.`;
+    element.textContent = `${count.toLocaleString()} indexed Guardians; ${queued.toLocaleString()} waiting for a public profile.${freshness} Rankings cover tracked accounts.${updated}`;
   } catch {
     element.textContent = 'Leaderboard coverage is temporarily unavailable.';
   }

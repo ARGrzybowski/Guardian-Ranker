@@ -20,10 +20,10 @@ export function createEdgeHandler({ url, key, apiKey = API_KEY, storeFactory = o
         .then(rows => rows[0]?.invocation_token).catch(error => { tokenPromise = undefined; throw error; });
       if (!sameToken(provided, await tokenPromise)) return new Response('Unauthorized', { status: 401 });
       // Stay below the free-plan 150-second wall-clock limit, leaving time for cleanup.
-      const signal = AbortSignal.timeout(100000);
+      const signal = AbortSignal.timeout(110000);
       const store = storeFactory({ url, key, signal });
-      const bungie = bungieFactory({ apiKey, maxOperations: 60, signal });
-      const summary = await index({ store, bungie, signal, maxProfiles: 15, maxDiscoveries: 5, maxClanPages: 3 });
+      const bungie = bungieFactory({ apiKey, maxOperations: 240, intervalMs: 334, stopAt: Date.now() + 80000, signal });
+      const summary = await index({ store, bungie, signal, maxProfiles: 100, profileConcurrency: 4, maxDiscoveries: 5, maxClanPages: 3, maxActivityScans: 2 });
       console.log(JSON.stringify(summary));
       return Response.json(summary);
     } catch {

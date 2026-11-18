@@ -28,7 +28,8 @@ export class IndexStore {
   select(table, filters) { return this.request(`${table}?${new URLSearchParams(filters)}`); }
   insert(table, rows) {
     if (!rows.length) return Promise.resolve();
-    return this.request(`${table}?on_conflict=${table === 'guardian_index_clans' ? 'clan_id' : 'membership_id'}`, {
+    const conflict = { guardian_index_clans: 'clan_id', guardian_index_activities: 'activity_id', guardian_index: 'membership_id' }[table];
+    return this.request(`${table}?on_conflict=${conflict}`, {
       method: 'POST', body: rows, prefer: 'resolution=ignore-duplicates,return=minimal'
     });
   }
@@ -36,19 +37,26 @@ export class IndexStore {
     return this.request(`${table}?${new URLSearchParams({ [key]: `eq.${id}` })}`, { method: 'PATCH', body: values, prefer: 'return=minimal' });
   }
   start() { return this.rpc('start_guardian_index_run', {}); }
+  backoff(until) { return this.patch('guardian_index_lease','singleton','true',{backoff_until:until}); }
   finish(id, status, summary) {
     // Release the lease even if the run's overall deadline has expired.
     const cleanup = new IndexStore({ url: this.url, key: this.key, fetchImpl: this.fetch });
     return cleanup.rpc('finish_guardian_index_run', { p_run_id: id, p_status: status, p_summary: summary });
   }
   dueProfiles(now, limit) {
-    return this.select('guardian_index', { select: '*', canonical_membership_id: 'is.null', next_refresh_at: `lte.${now}`, order: 'next_refresh_at.asc,membership_id.asc', limit });
+    return this.rpc('get_guardians_due', { p_now: now, p_limit: limit });
   }
   dueDiscovery(now, limit) {
     return this.select('guardian_index', { select: 'membership_id,membership_type', canonical_membership_id: 'is.null', membership_type: 'not.is.null', next_discovery_at: `lte.${now}`, order: 'next_discovery_at.asc,membership_id.asc', limit });
   }
   dueClans(now, limit) {
     return this.select('guardian_index_clans', { select: '*', next_scan_at: `lte.${now}`, order: 'next_scan_at.asc,clan_id.asc', limit });
+  }
+  dueActivities(now, limit) {
+    return this.select('guardian_index', { select: 'membership_id,membership_type,character_id', canonical_membership_id: 'is.null', profile_status: 'eq.public', character_id: 'not.is.null', next_activity_scan_at: `lte.${now}`, order: 'next_activity_scan_at.asc,membership_id.asc', limit });
+  }
+  async activitySeen(id) {
+    return (await this.select('guardian_index_activities', { select: 'activity_id', activity_id: `eq.${id}`, limit: 1 })).length > 0;
   }
   save(requestedId, snapshot, nextRefresh) {
     return this.rpc('save_guardian_snapshot', { p_requested_id: requestedId, p_snapshot: snapshot, p_next_refresh_at: nextRefresh });
