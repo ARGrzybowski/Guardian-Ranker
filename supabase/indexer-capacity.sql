@@ -133,7 +133,7 @@ create or replace view public.guardian_index_status with (security_invoker=true)
 select tracked_count,indexed_count,last_refreshed_at,last_run_at,fresh_24h_count,due_count,oldest_profile_at
 from public.guardian_index_metrics where singleton;
 create or replace function public.finish_guardian_index_run(p_run_id uuid, p_status text, p_summary jsonb)
-returns void language plpgsql security definer set search_path = '' as $
+returns void language plpgsql security definer set search_path = '' as $$
 begin
   update public.guardian_index_runs set completed_at = now(), status = p_status, summary = p_summary
   where id = p_run_id and status = 'running';
@@ -148,7 +148,7 @@ begin
   where singleton;
   update public.guardian_index_lease set owner = null, expires_at = null where singleton and owner = p_run_id;
 end;
-$;
+$$;
 
 
 commit;
