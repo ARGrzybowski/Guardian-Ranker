@@ -215,6 +215,7 @@ test('recently verified identities refresh with one profile request', async () =
   assert.equal(result.cached_identity_hits,1);
   assert.equal(bungie.operations,1);
   assert.ok(bungie.paths[0].includes('/Profile/1/'));
+  assert.ok(bungie.paths[0].endsWith('components=100,200,900'));
   assert.equal(store.guardians.get('1').next_refresh_at,'2026-11-18T12:15:00.000Z');
 });
 

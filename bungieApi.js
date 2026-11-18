@@ -79,7 +79,7 @@ export async function searchNameSuggestions(prefix, signal) {
   return Response;
 }
 
-export async function loadPlayerProfile(user, signal, request = bungieRequest) {
+export async function loadPlayerProfile(user, signal, request = bungieRequest, components = '100,200,800,900') {
   const memberships = (user.destinyMemberships || []).filter(m =>
     m.membershipId && m.membershipType > 0 && m.membershipType !== 254 &&
     (!m.crossSaveOverride || m.crossSaveOverride === m.membershipType)
@@ -91,7 +91,7 @@ export async function loadPlayerProfile(user, signal, request = bungieRequest) {
     signal?.throwIfAborted();
     try {
       const profileData = await request(
-        `/Destiny2/${membership.membershipType}/Profile/${membership.membershipId}/?components=100,200,800,900`,
+        `/Destiny2/${membership.membershipType}/Profile/${membership.membershipId}/?components=${components}`,
         { signal }
       );
       const characters = Object.values(profileData.Response?.characters?.data || {});

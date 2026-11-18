@@ -76,7 +76,7 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
           now().getTime() - Date.parse(row.identity_checked_at) < 86400000;
         if (cachedIdentity) {
           try {
-            loaded = await loadPlayerProfile({ destinyMemberships: [{ membershipId: row.membership_id, membershipType: row.membership_type }] }, signal, request);
+            loaded = await loadPlayerProfile({ destinyMemberships: [{ membershipId: row.membership_id, membershipType: row.membership_type }] }, signal, request, '100,200,900');
             const override = loaded.profileData.Response.profile?.data?.userInfo?.crossSaveOverride;
             if (override && override !== row.membership_type) loaded = null;
             else summary.cached_identity_hits++;
@@ -91,7 +91,7 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
           user = { destinyMemberships: data.Response?.destinyMemberships || [] };
         }
         if (!loaded) {
-          loaded = await loadPlayerProfile(user, signal, request);
+          loaded = await loadPlayerProfile(user, signal, request, '100,200,900');
           identityCheckedAt = now().toISOString();
         }
         const snapshot = profileSnapshot(loaded);
