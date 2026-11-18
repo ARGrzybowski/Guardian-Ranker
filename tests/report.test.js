@@ -39,6 +39,12 @@ test('career rates use numeric totals and account-provided ratios when available
   assert.equal(s.kd, 5); assert.equal(s.efficiency, 7); assert.equal(s.winRate, 70);
   assert.equal(summarizeCareer({ ...stats, killsDeathsRatio: { basic: { value: 3.25 } } }).kd, 3.25);
 });
+test('collection acquisition sources are searchable and commendations stay nullable', () => {
+  const entries = [{ name: 'Ship', description: '', acquired: true, definition: { sourceString: 'Earned in a raid' } }];
+  assert.equal(filterCatalogue(entries, 'raid', 'all', 'collections').length, 1);
+  assert.equal(overviewStats({}).commendationScore, null);
+  assert.equal(overviewStats({ profileCommendations: { data: { totalScore: 1234 } } }).commendationScore, 1234);
+});
 test('history merging keeps unique reports, uses full 64-bit string IDs, sorts dates', () => {
   const a = { period: '2026-01-01', activityDetails: { instanceId: '9223372036854775801' } };
   const b = { period: '2026-02-01', activityDetails: { instanceId: '9223372036854775802' } };
