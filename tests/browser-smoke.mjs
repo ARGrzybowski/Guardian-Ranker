@@ -64,15 +64,19 @@ await new Promise(resolve => portServer.close(resolve));
 const profileDir = await mkdtemp(join(tmpdir(), 'guardian-ranker-browser-'));
 const browser = spawn(process.env.BROWSER_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+  ...(process.platform === 'linux' ? ['--disable-dev-shm-usage'] : []),
   `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profileDir}`, 'about:blank'
-], { windowsHide: true, stdio: 'ignore' });
+], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
 let spawnError;
+let launchDiagnostics = '';
+browser.stderr.on('data', data => { launchDiagnostics = (launchDiagnostics + data.toString()).slice(-6000); });
 browser.on('error', error => { spawnError = error; });
 let socket;
 try {
   let targets;
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < 300; attempt++) {
     if (spawnError) throw spawnError;
+    if (browser.exitCode != null) throw new Error(`Browser exited before debugging started (${browser.exitCode}): ${launchDiagnostics}`);
     try {
       targets = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json();
       if (targets.some(target => target.type === 'page')) break;
@@ -80,7 +84,7 @@ try {
     await sleep(100);
   }
   const target = targets?.find(target => target.type === 'page');
-  assert.ok(target, 'Browser debugging endpoint started');
+  assert.ok(target, `Browser debugging endpoint started: ${launchDiagnostics}`);
   socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
   let sequence = 0;
