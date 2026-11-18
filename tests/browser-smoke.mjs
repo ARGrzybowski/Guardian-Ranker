@@ -16,14 +16,18 @@ const fixtureRows = Array.from({ length: 8 }, (_, i) => ({
   class_type: 'Titan', light_level: 400 - i
 }));
 const databaseScript = `
-window.__writes = []; window.__dbFail = false; window.__rows = ${JSON.stringify(fixtureRows)};
-window.supabase = { createClient: () => ({ from: table => ({
-  upsert: async (row, options) => {
-    window.__writes.push({ table, row, options });
-    return { data: null, error: window.__dbFail ? { message: 'Offline' } : null };
+window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
+window.supabase = { createClient: () => ({
+  rpc: async (name, args) => {
+    window.__writes.push({ name, args });
+    return { data: true, error: window.__dbFail ? { message: 'Offline' } : null };
   },
+  from: table => ({
   select: () => {
-    const query = { order: () => query, range: async (start, end) => ({ data: window.__rows.slice(start, end + 1), error: null }) };
+    const error = window.__indexMissing && table.startsWith('guardian_') ? { code: 'PGRST205' } : null;
+    const query = { order: () => query,
+      single: async () => ({ data: { indexed_count: 8, tracked_count: 10, last_refreshed_at: '2026-11-18T12:00:00Z' }, error }),
+      range: async (start, end) => ({ data: window.__rows.slice(start, end + 1), error }) };
     return query;
   }
 }) }) };`;
@@ -175,7 +179,9 @@ try {
   await cdp('Page.navigate', { url: origin });
   await waitFor("document.querySelector('#leaderboard-body tr a') && document.getElementById('nameInput')");
   await search('Hawk#7753');
-  await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753' && window.__writes.length === 2");
+  await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753' && window.__writes.length === 1");
+  assert.deepEqual(await evaluate('window.__writes[0]'), { name: 'enqueue_guardian', args: { p_membership_id: 'hawk', p_membership_type: 1 } });
+  assert.match(await evaluate("document.getElementById('index-status').textContent"), /8 indexed Guardians; 2 waiting/);
   assert.equal(apiCalls.filter(url => url.includes('/User/Search/')).length, 0, 'Full names never use prefix search');
   assert.equal(await evaluate("document.querySelectorAll('#results .character-section img').length"), 3);
   assert.equal(await evaluate('window.__intervals.size'), 1, 'Only one weekly-reset timer remains active');
@@ -184,7 +190,7 @@ try {
   assert.equal(await evaluate('Boolean(window.__injected)'), false, 'Display names cannot inject HTML');
   await evaluate('window.__dbFail = true');
   await search('Offline#1234');
-  await waitFor("document.querySelector('#results [role=status]')?.textContent.includes('could not be saved')");
+  await waitFor("document.querySelector('#results [role=status]')?.textContent.includes('could not be queued')");
   assert.equal(await evaluate("document.querySelector('#results .bungie-name').textContent"), 'Offline#1234');
   await search('Private#1234');
   await waitFor("document.getElementById('results').textContent.includes('No public characters')");
@@ -224,6 +230,9 @@ try {
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
   const desktop = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'leaderboards.png'), Buffer.from(desktop.data, 'base64'));
+  await evaluate("window.__indexMissing = true; import('./leaderboard.js').then(module => module.loadLeaderboards())");
+  assert.match(await evaluate("document.getElementById('index-status').textContent"), /not enabled yet/);
+  assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');
   console.log('PASS: exact account lookup, profile display, save failures, empty/missing accounts, stale searches, Enter key, mobile layout, leaderboard toggles and search.');
 } finally {

@@ -1,0 +1,7 @@
+# Server code, tests, dependencies, and SQL are not part of the public website.
+exclude:
+  - worker
+  - supabase
+  - tests
+  - node_modules
+  - test-artifacts

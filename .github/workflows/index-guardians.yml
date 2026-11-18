@@ -1,0 +1,36 @@
+name: Refresh Guardian index
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardian-indexer
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    # Opt in only after the SQL migration and server secret have been configured.
+    if: github.ref == 'refs/heads/main' && vars.INDEXER_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Import clan members and refresh verified profiles
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://vmwdspxtlryiypqacmmx.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BUNGIE_API_KEY: ${{ secrets.BUNGIE_API_KEY }}
+          INDEXER_SEED_NAMES: ${{ vars.INDEXER_SEED_NAMES || 'Hawk#7753' }}
+          INDEXER_SEED_CLANS: ${{ vars.INDEXER_SEED_CLANS }}
+        run: node worker/run.mjs

@@ -22,6 +22,7 @@ function renderBoard(board, errorMessage) {
   const rows = board.showAll ? board.rows : board.rows.slice(0, 5);
   for (const [index, row] of rows.entries()) {
     const tr = document.createElement('tr');
+    if (row.last_refreshed_at) tr.title = `Refreshed ${new Date(row.last_refreshed_at).toLocaleString()}`;
     const rank = document.createElement('td');
     rank.textContent = index + 1;
     tr.appendChild(rank);
@@ -61,15 +62,23 @@ async function loadBoard(board) {
   const version = ++board.version;
   try {
     const rows = [];
+    let table = 'guardian_rankings';
     // Supabase caps a single response. Read all pages in a stable order.
     const pageSize = 1000;
     for (let offset = 0; ; offset += pageSize) {
-      const { data, error } = await getDatabase().from(board.table)
-        .select(['membership_id', 'bungie_name', ...board.fields].join(','))
+      const { data, error } = await getDatabase().from(table)
+        .select(['membership_id', 'bungie_name', ...board.fields, ...(table === 'guardian_rankings' ? ['last_refreshed_at'] : [])].join(','))
         .order(board.score, { ascending: false, nullsFirst: false })
         .order('membership_id', { ascending: true })
         .range(offset, offset + pageSize - 1);
       if (version !== board.version) return;
+      // Roll out the frontend safely before the SQL migration is installed.
+      if (table === 'guardian_rankings' && ['PGRST205', '42P01'].includes(error?.code)) {
+        table = board.table;
+        rows.length = 0;
+        offset = -pageSize;
+        continue;
+      }
       if (error) throw error;
       rows.push(...(data || []));
       if (!data || data.length < pageSize) break;
@@ -87,27 +96,26 @@ export const loadLeaderboard = () => loadBoard(boards.triumph);
 export const loadGuardianRankLeaderboard = () => loadBoard(boards.guardian);
 export const loadPowerLeaderboard = () => loadBoard(boards.power);
 export const loadTimePlayedLeaderboard = () => loadBoard(boards.time);
-export const loadLeaderboards = () => Promise.all(Object.values(boards).map(loadBoard));
-
-export async function upsertPlayer(player) {
-  // Missing/private metrics must not replace saved numbers with strings or nulls.
-  const row = Object.fromEntries(Object.entries({
-    bungie_name: player.bungie_name, membership_id: player.membership_id,
-    time_played_hours: player.time_played_hours, triumph_score: player.triumph_score,
-    guardian_rank: player.guardian_rank, highest_guardian_rank: player.highest_guardian_rank,
-    last_updated: new Date().toISOString()
-  }).filter(([, value]) => value != null));
-  const { error } = await getDatabase().from('leaderboard').upsert(row, { onConflict: 'membership_id' });
-  if (error) throw error;
-  // Supabase v2 returns no rows by default; the accepted payload is sufficient here.
-  return row;
+export async function loadIndexStatus() {
+  const element = document.getElementById('index-status');
+  if (!element) return;
+  try {
+    const { data, error } = await getDatabase().from('guardian_index_status').select('*').single();
+    if (error) {
+      element.textContent = ['PGRST205', '42P01'].includes(error.code)
+        ? 'Automatic indexing is not enabled yet. Showing previously searched players.'
+        : 'Leaderboard coverage is temporarily unavailable.';
+      return;
+    }
+    const count = Number(data.indexed_count);
+    const queued = Math.max(0, Number(data.tracked_count) - count);
+    const updated = data.last_refreshed_at ? ` Latest profile refresh: ${new Date(data.last_refreshed_at).toLocaleString()}.` : ' Waiting for the first cloud refresh.';
+    element.textContent = `${count.toLocaleString()} indexed Guardians; ${queued.toLocaleString()} waiting for a public profile. Rankings cover tracked accounts.${updated}`;
+  } catch {
+    element.textContent = 'Leaderboard coverage is temporarily unavailable.';
+  }
 }
-
-export async function addOrUpdatePlayer(player) {
-  const row = await upsertPlayer(player);
-  await loadLeaderboards();
-  return row;
-}
+export const loadLeaderboards = () => Promise.all([loadIndexStatus(), ...Object.values(boards).map(loadBoard)]);
 
 document.addEventListener('DOMContentLoaded', () => {
   for (const board of Object.values(boards)) {

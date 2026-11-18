@@ -1,6 +1,6 @@
 import { searchExactName, searchNameSuggestions, loadPlayerProfile, parseBungieName, formatBungieName } from './bungieApi.js';
-import { upsertPlayer, loadLeaderboards } from './leaderboard.js';
-import { upsertHighestCharacter } from './highestCharacter.js';
+import { loadLeaderboards } from './leaderboard.js';
+import { queueGuardian } from './indexQueue.js';
 import { escapeHtml } from './html.js';
 
 const input = document.getElementById('nameInput');
@@ -95,7 +95,7 @@ const formatStat = value => value == null ? 'Unavailable' : escapeHtml(value.toL
 
 function renderProfile(user, { membership: mem, profileData }, version) {
   const bungieName = formatBungieName(user);
-  const { membershipId, displayName, iconPath } = mem;
+  const { membershipId, membershipType, displayName, iconPath } = mem;
   const iconUrl = `https://www.bungie.net${iconPath || ''}`;
   const chars = profileData.Response.characters.data;
   const totalMinutes = Object.values(chars).reduce((sum, c) => sum + (parseInt(c.minutesPlayedTotal) || 0), 0);
@@ -103,12 +103,6 @@ function renderProfile(user, { membership: mem, profileData }, version) {
   const triumphScore = profileData.Response.profileRecords?.data?.lifetimeScore ?? null;
   const currentGuardianRank = profileData.Response.profile?.data?.currentGuardianRank ?? null;
   const highestGuardianRank = profileData.Response.profile?.data?.lifetimeHighestGuardianRank ?? null;
-  const player = {
-    bungie_name: bungieName, membership_id: membershipId,
-    time_played_hours: playTimeHours, triumph_score: triumphScore,
-    guardian_rank: currentGuardianRank, highest_guardian_rank: highestGuardianRank
-  };
-  const highestChar = Object.values(chars).reduce((best, c) => !best || Number(c.light) > Number(best.light) ? c : best, null);
   const lastLogin = Object.values(chars).map(c => new Date(c.dateLastPlayed)).sort((a, b) => b - a)[0]?.toLocaleDateString() || 'N/A';
   const collectibles = profileData.Response.profileCollectibles?.data?.collectibles;
   const hasCollections = collectibles != null;
@@ -192,23 +186,19 @@ function renderProfile(user, { membership: mem, profileData }, version) {
     URL.revokeObjectURL(url);
   });
 
-  // A database outage must not hide a successfully loaded Bungie profile.
+  // Visitors submit identities only. The cloud worker fetches trusted scores.
   const saveStatus = document.createElement('p');
   saveStatus.setAttribute('role', 'status');
   userCard.appendChild(saveStatus);
   void (async () => {
-    const writes = await Promise.allSettled([
-      upsertPlayer(player),
-      upsertHighestCharacter({
-        bungie_name: bungieName, membership_id: membershipId,
-        character_id: highestChar.characterId,
-        character_class: classTypeMap[highestChar.classType] || 'Unknown',
-        character_light: highestChar.light, emblem_path: highestChar.emblemBackgroundPath,
-        last_played: highestChar.dateLastPlayed
-      })
-    ]);
-    if (writes.some(write => write.status === 'rejected') && version === searchVersion) {
-      saveStatus.textContent = 'Profile loaded. Some leaderboard updates could not be saved. Please try again later.';
+    try {
+      await queueGuardian(membershipId, membershipType);
+      if (version === searchVersion) saveStatus.textContent = 'Account tracked. Leaderboard scores update during scheduled cloud refreshes.';
+    } catch (error) {
+      if (version !== searchVersion) return;
+      saveStatus.textContent = error.code === 'PGRST202'
+        ? 'Profile loaded. Automatic leaderboard indexing is not enabled yet.'
+        : 'Profile loaded. This account could not be queued for indexing. Please try again later.';
     }
     await loadLeaderboards();
   })();

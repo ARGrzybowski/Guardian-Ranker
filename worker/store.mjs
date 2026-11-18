@@ -1,0 +1,63 @@
+// This module is server-only. Never import it into a browser entry point.
+export class IndexStore {
+  constructor({ url, key, fetchImpl = fetch, signal }) {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.hostname !== '127.0.0.1') throw new Error('Supabase URL must use HTTPS.');
+    this.url = `${parsed.origin}/rest/v1/`;
+    this.key = key;
+    this.fetch = fetchImpl;
+    this.signal = signal;
+  }
+  async request(path, { method = 'GET', body, prefer } = {}) {
+    const response = await this.fetch(this.url + path, {
+      method, headers: { apikey: this.key, ...(!this.key.startsWith('sb_secret_') ? { Authorization: `Bearer ${this.key}` } : {}),
+        'Content-Type': 'application/json', ...(prefer ? { Prefer: prefer } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.any([...(this.signal ? [this.signal] : []), AbortSignal.timeout(15000)])
+    });
+    if (!response.ok) {
+      // Do not log response bodies, request headers, or credentials into Actions logs.
+      const error = new Error(`Index database request failed (HTTP ${response.status}). Check the migration and worker secret.`);
+      error.databaseFailure = true;
+      throw error;
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+  }
+  rpc(name, body) { return this.request(`rpc/${name}`, { method: 'POST', body }); }
+  select(table, filters) { return this.request(`${table}?${new URLSearchParams(filters)}`); }
+  insert(table, rows) {
+    if (!rows.length) return Promise.resolve();
+    return this.request(`${table}?on_conflict=${table === 'guardian_index_clans' ? 'clan_id' : 'membership_id'}`, {
+      method: 'POST', body: rows, prefer: 'resolution=ignore-duplicates,return=minimal'
+    });
+  }
+  patch(table, key, id, values) {
+    return this.request(`${table}?${new URLSearchParams({ [key]: `eq.${id}` })}`, { method: 'PATCH', body: values, prefer: 'return=minimal' });
+  }
+  start() { return this.rpc('start_guardian_index_run', {}); }
+  finish(id, status, summary) {
+    // Release the lease even if the run's overall deadline has expired.
+    const cleanup = new IndexStore({ url: this.url, key: this.key, fetchImpl: this.fetch });
+    return cleanup.rpc('finish_guardian_index_run', { p_run_id: id, p_status: status, p_summary: summary });
+  }
+  dueProfiles(now, limit) {
+    return this.select('guardian_index', { select: '*', canonical_membership_id: 'is.null', next_refresh_at: `lte.${now}`, order: 'next_refresh_at.asc,membership_id.asc', limit });
+  }
+  dueDiscovery(now, limit) {
+    return this.select('guardian_index', { select: 'membership_id,membership_type', canonical_membership_id: 'is.null', membership_type: 'not.is.null', next_discovery_at: `lte.${now}`, order: 'next_discovery_at.asc,membership_id.asc', limit });
+  }
+  dueClans(now, limit) {
+    return this.select('guardian_index_clans', { select: '*', next_scan_at: `lte.${now}`, order: 'next_scan_at.asc,clan_id.asc', limit });
+  }
+  save(requestedId, snapshot, nextRefresh) {
+    return this.rpc('save_guardian_snapshot', { p_requested_id: requestedId, p_snapshot: snapshot, p_next_refresh_at: nextRefresh });
+  }
+  failProfile(row, nextRefresh, isPrivate) {
+    return this.patch('guardian_index', 'membership_id', row.membership_id, {
+      next_refresh_at: nextRefresh, error_count: row.error_count + 1,
+      last_error: isPrivate ? 'No public characters' : 'Bungie request failed',
+      ...(isPrivate ? { profile_status: 'private' } : {})
+    });
+  }
+}

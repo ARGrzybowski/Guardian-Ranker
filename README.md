@@ -12,7 +12,7 @@
 ## Features
 
 - **Player Stat Search:** Find and view detailed stats for any Destiny 2 player.
-- **Leaderboards:** Automatically rank searched players across several leaderboards for direct comparison.
+- **Leaderboards:** Rank Bungie-verified profiles across power, Triumph score, time played, and Guardian Rank. Automatic clan discovery and refresh run in GitHub Actions once configured.
 - **Season Info:** Shows the current Destiny 2 season, its overall duration, and a live countdown to the next weekly reset.
 - **No Installation Required:** Guardian-Ranker is a browser-based application.
 
@@ -35,7 +35,9 @@ Partial names show the first page of suggestions. If there are more matches, ref
 
 Cross-save uses the active membership. For independent platform accounts, the profile with the most recently played public characters is displayed. Private or empty profiles show an explanatory message. Successfully loaded profiles remain visible if leaderboard storage is unavailable.
 
-Leaderboards contain searched players, refreshed when they are searched again. They are not global Destiny rankings. Missing/private metrics do not overwrite existing saved values.
+With the cloud indexer configured, leaderboards include automatically imported clan members, even if they have never been searched. Searches queue identities for background verification; browsers do not submit scores. Coverage counts and refresh timestamps describe the tracked population, not global Destiny rankings.
+
+See [Automatic indexing setup](docs/automatic-indexer.md) for the one-time Supabase migration and GitHub Actions secrets/variables. The scheduled worker runs on GitHub-hosted machines, not your computer. Before activation, the website explicitly labels its legacy searched-player rankings.
 
 ## Development
 
