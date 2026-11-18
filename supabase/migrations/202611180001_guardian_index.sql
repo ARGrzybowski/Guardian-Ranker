@@ -96,6 +96,7 @@ begin
   values (p_membership_id, p_membership_type, 'search');
   return true;
 end;
+$$;
 revoke all on function public.enqueue_guardian(text, integer) from public;
 grant execute on function public.enqueue_guardian(text, integer) to anon, authenticated, service_role;
 
@@ -109,6 +110,7 @@ begin
   insert into public.guardian_index_runs(id) values (v_owner);
   return v_owner;
 end;
+$$;
 create function public.finish_guardian_index_run(p_run_id uuid, p_status text, p_summary jsonb)
 returns void language plpgsql security definer set search_path = '' as $$
 begin
@@ -116,6 +118,7 @@ begin
   where id = p_run_id and status = 'running';
   update public.guardian_index_lease set owner = null, expires_at = null where singleton and owner = p_run_id;
 end;
+$$;
 
 -- Canonical cross-save remapping and snapshot writes happen in one transaction.
 create function public.save_guardian_snapshot(p_requested_id text, p_snapshot jsonb, p_next_refresh_at timestamptz)
@@ -144,6 +147,7 @@ begin
     update public.guardian_index set canonical_membership_id = v_id where membership_id = p_requested_id;
   end if;
 end;
+$$;
 revoke all on function public.start_guardian_index_run(), public.finish_guardian_index_run(uuid,text,jsonb), public.save_guardian_snapshot(text,jsonb,timestamptz) from public, anon, authenticated;
 grant execute on function public.start_guardian_index_run(), public.finish_guardian_index_run(uuid,text,jsonb), public.save_guardian_snapshot(text,jsonb,timestamptz) to service_role;
 
