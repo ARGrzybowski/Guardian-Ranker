@@ -105,6 +105,13 @@ ul#suggestions li:hover {
   outline: 2px solid #90ee90;
 }
 
+.index-status {
+  color: #bbb;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 650px;
+}
+
 /* User card styling */
 .user-card {
   background-color: #282828;

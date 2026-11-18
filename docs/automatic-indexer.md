@@ -1,0 +1,99 @@
+# Automatic Guardian indexing
+
+The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase
+Cron** every 15 minutes. Your computer can be switched off. No local scheduler,
+service, or persistent process is required.
+
+## Cloud architecture
+
+- Supabase stores discovered identities, trusted profile snapshots, clan page
+  cursors, run summaries, a worker lease, and aggregate coverage.
+- The worker discovers clans from tracked accounts, imports every roster page,
+  and refreshes public profiles independently of website searches.
+- A protected Edge Function processes small batches: up to 15 profile attempts,
+  five clan lookups, three roster pages, and 60 logical Bungie operations per run.
+  A 100-second deadline leaves cleanup time within the free-plan runtime limit.
+- Supabase Cron invokes the function every 15 minutes. A random invocation token
+  stays in the restricted lease table and is never returned to browser clients.
+  The function authenticates this token itself before doing any indexing.
+- The Edge runtime uses its built-in server credentials. No private Supabase key
+  needs to be copied into GitHub or provided in chat.
+- GitHub Pages serves the frontend. Searches enqueue identities, never scores.
+
+Each run refreshes older due accounts first, discovers their clans, imports roster
+pages, then uses any remaining profile budget on newly discovered members.
+Rosters checkpoint after every page. Duplicate discoveries do not reset due times.
+The next run resumes unfinished work, including after operation limits or failures.
+
+Active profiles become due after six hours; accounts not played in seven days
+become due after 48 hours. Failed profiles back off between six and 48 hours.
+Clans are rediscovered and rescanned daily. Scheduling and service availability can
+delay actual refreshes; the website shows the latest profile-refresh timestamp.
+
+## Deployment order
+
+1. Apply the base migration in
+   `supabase/migrations/202611180001_guardian_index.sql` once. It seeds identities
+   from the old leaderboard without trusting browser-submitted scores.
+2. Apply `supabase/cloud-schedule.sql` once using Supabase migration tools. This
+   enables pg_cron/pg_net, generates the private invocation token, and creates an
+   initially disabled scheduled job.
+3. Deploy `supabase/functions/guardian-indexer/index.ts` with its relative
+   dependencies and `verify_jwt=false`. Its own invocation-token authentication
+   protects it; an anonymous request must return HTTP 401.
+4. Trigger `select guardian_private.invoke_guardian_indexer();` from an authorized
+   SQL session. Check the run summary, HTTP result, and indexed-account count.
+5. Enable the job with
+   `select cron.alter_job((select jobid from cron.job where jobname='guardian-indexer'), active := true);`
+6. Merge the frontend changes into main and confirm GitHub Pages deployment.
+
+Deployment through the connected Supabase tools records applied migrations in the
+hosted project's migration history. No live indexer command should run locally.
+
+## Public data and permissions
+
+The queue RPC accepts only a membership ID and type. It has no display-name or score
+arguments. Duplicate requests are idempotent, and a serialized global cap admits
+at most 100 new search-origin identities per hour. Trusted clan discovery is not
+subject to this public admission cap.
+
+RLS restricts public reads of the backing index to verified public snapshot rows
+and explicit display columns; internal queue fields remain inaccessible. The
+ranking and status views use `security_invoker=true`, and browser roles have
+SELECT-only access. Coverage metrics live in a separate public-read-only summary.
+
+Private profiles leave public rankings without erasing their cached snapshot.
+Transient errors retain the previous snapshot and its original timestamp. Missing
+individual metrics preserve earlier known values, so an individual metric's age
+can differ from the overall profile-refresh time.
+
+Before the migration exists, the frontend labels the old read-only rankings as
+previously searched players. After migration, rankings may briefly be empty while
+the initial queue is verified. These are rankings among **tracked Guardians**,
+not an exhaustive global census. Activity-report discovery is a later stage.
+
+## Monitoring and stopping
+
+Inspect `guardian_index_runs` for completed, partial, budget_reached, or failed
+runs. Inspect `guardian_index_clans.next_page` for roster progress.
+`guardian_index_status` provides aggregate coverage without exposing queue details.
+
+Disable the cron job to stop future runs:
+`select cron.alter_job((select jobid from cron.job where jobname='guardian-indexer'), active := false);`
+A terminated run's lease expires after 20 minutes. Existing scores remain readable.
+
+## Optional GitHub-hosted alternative
+
+`.github/workflows/index-guardians.yml` remains available for a GitHub-hosted runner.
+It stays disabled unless `INDEXER_ENABLED=true` is explicitly configured. Do not
+enable it while Supabase Cron is active. This alternative requires GitHub secrets
+`SUPABASE_SERVICE_ROLE_KEY` and `BUNGIE_API_KEY`. The operational Node entry point
+refuses to run outside GitHub Actions.
+
+## Verification
+
+`node --test tests/*.test.js` runs mocked regression tests, including worker
+authentication and batching. `node tests/browser-smoke.mjs` checks the frontend
+against mocked APIs. PR CI applies the base migration to disposable PostgreSQL
+and verifies permissions, admission limits, canonical snapshots, and worker leases.
+No local test indexes live players or contacts production Supabase.

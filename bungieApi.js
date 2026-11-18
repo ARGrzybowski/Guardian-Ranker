@@ -14,14 +14,14 @@ function delay(ms, signal) {
 }
 
 // Retry transient failures, but never scan indefinitely or leave a request hanging.
-export async function bungieRequest(path, { signal, body } = {}) {
+export async function bungieRequest(path, { signal, body, apiKey = API_KEY } = {}) {
   for (let attempt = 0; attempt < 3; attempt++) {
     signal?.throwIfAborted();
     let retryAfter = 300 * (attempt + 1);
     try {
       const response = await fetch(`${PLATFORM_URL}${path}`, {
         method: body === undefined ? 'GET' : 'POST',
-        headers: { 'X-API-Key': API_KEY, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        headers: { 'X-API-Key': apiKey, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(15000)])
       });
@@ -55,11 +55,11 @@ export function formatBungieName(user) {
   return `${user.bungieGlobalDisplayName}#${String(user.bungieGlobalDisplayNameCode).padStart(4, '0')}`;
 }
 
-export async function searchExactName(value, signal) {
+export async function searchExactName(value, signal, request = bungieRequest) {
   const name = parseBungieName(value);
   if (!name) throw new Error('Enter a full Bungie name, such as Guardian#1234.');
   // The exact endpoint has no prefix-result pagination limit. All = -1.
-  const { Response: memberships } = await bungieRequest('/Destiny2/SearchDestinyPlayerByBungieName/-1/', {
+  const { Response: memberships } = await request('/Destiny2/SearchDestinyPlayerByBungieName/-1/', {
     signal, body: name
   });
   if (!memberships?.length) throw new Error(`No Destiny 2 account found for ${value}.`);
@@ -76,7 +76,7 @@ export async function searchNameSuggestions(prefix, signal) {
   return Response;
 }
 
-export async function loadPlayerProfile(user, signal) {
+export async function loadPlayerProfile(user, signal, request = bungieRequest) {
   const memberships = (user.destinyMemberships || []).filter(m =>
     m.membershipId && m.membershipType > 0 && m.membershipType !== 254 &&
     (!m.crossSaveOverride || m.crossSaveOverride === m.membershipType)
@@ -87,7 +87,7 @@ export async function loadPlayerProfile(user, signal) {
   for (const membership of memberships) {
     signal?.throwIfAborted();
     try {
-      const profileData = await bungieRequest(
+      const profileData = await request(
         `/Destiny2/${membership.membershipType}/Profile/${membership.membershipId}/?components=100,200,800,900`,
         { signal }
       );
@@ -102,5 +102,7 @@ export async function loadPlayerProfile(user, signal) {
     }
   }
   if (profiles.length) return profiles.sort((a, b) => b.lastPlayed - a.lastPlayed)[0];
-  throw lastError || new Error('No public characters are available. This account may be private or have no Destiny 2 characters.');
+  const error = lastError || new Error('No public characters are available. This account may be private or have no Destiny 2 characters.');
+  if (!lastError) error.noPublicCharacters = true;
+  throw error;
 }

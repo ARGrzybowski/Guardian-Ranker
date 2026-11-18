@@ -14,47 +14,49 @@ const elements = Object.fromEntries(ids.map(id => [id, new Element()]));
 globalThis.document = Object.assign(new EventTarget(), {
   getElementById: id => elements[id], createElement: () => new Element()
 });
-const writes = [], reads = [];
-let rows = [], writeError = null;
-globalThis.supabase = { createClient: () => ({ from: table => ({
-  upsert: async (row, options) => { writes.push({ table, row, options }); return { data: null, error: writeError }; },
+const requests = [], reads = [];
+let rows = [], queueError = null, queueAccepted = true, indexMissing = false;
+globalThis.supabase = { createClient: () => ({
+  rpc: async (name, args) => { requests.push({ name, args }); return { data: queueAccepted, error: queueError }; },
+  from: table => ({
   select: fields => {
     const read = { table, fields, orders: [] };
     reads.push(read);
     const query = {
       order: (field, options) => { read.orders.push({ field, options }); return query; },
-      range: async (start, end) => ({ data: rows.slice(start, end + 1), error: null })
+      range: async (start, end) => indexMissing && table === 'guardian_rankings'
+        ? { data: null, error: { code: 'PGRST205' } }
+        : { data: rows.slice(start, end + 1), error: null }
     };
     return query;
   }
 }) }) };
 const boards = await import('../leaderboard.js');
-const { upsertHighestCharacter } = await import('../highestCharacter.js');
+const { queueGuardian } = await import('../indexQueue.js');
+await import('../highestCharacter.js');
 await import('../timePlayed.js');
 
-test('a successful Supabase v2 upsert with null data returns the accepted row', async () => {
-  const saved = await boards.upsertPlayer({ membership_id: '1', bungie_name: 'Hawk#7753', triumph_score: 5 });
-  assert.equal(saved.triumph_score, 5);
-  assert.equal(writes.at(-1).options.onConflict, 'membership_id');
+test('browser searches submit identities without any scores or names', async () => {
+  await queueGuardian('1', 3);
+  assert.deepEqual(requests.at(-1), { name: 'enqueue_guardian', args: { p_membership_id: '1', p_membership_type: 3 } });
 });
 
-test('unavailable metrics are omitted instead of overwriting numeric columns', async () => {
-  await boards.upsertPlayer({ membership_id: '1', bungie_name: 'Hawk#7753', guardian_rank: null });
-  assert.equal('guardian_rank' in writes.at(-1).row, false);
+test('queue admission limits are reported instead of falsely claiming success', async () => {
+  queueAccepted = false;
+  await assert.rejects(queueGuardian('1', 3), /queue is busy/);
+  queueAccepted = true;
 });
 
-test('database errors propagate so the profile can show a save failure separately', async () => {
-  writeError = new Error('Database offline');
-  await assert.rejects(boards.upsertPlayer({ membership_id: '1' }), /Database offline/);
-  writeError = null;
+test('queue errors propagate separately from Bungie profile loading', async () => {
+  queueError = new Error('Database offline');
+  await assert.rejects(queueGuardian('1', 3), /Database offline/);
+  queueError = null;
 });
 
-test('power writes and reads agree on class_type and light_level', async () => {
-  await upsertHighestCharacter({ membership_id: '1', character_class: 'Titan', character_light: 400 });
-  assert.equal(writes.at(-1).row.class_type, 'Titan');
-  assert.equal(writes.at(-1).row.light_level, 400);
+test('power reads the verified ranking view with correct column names', async () => {
   await boards.loadPowerLeaderboard();
-  assert.match(reads.at(-1).fields, /class_type,light_level/);
+  assert.equal(reads.at(-1).table, 'guardian_rankings');
+  assert.match(reads.at(-1).fields, /class_type,light_level,last_refreshed_at/);
   assert.equal(reads.at(-1).orders[0].field, 'light_level');
 });
 
@@ -80,4 +82,12 @@ test('player names are assigned as text rather than HTML', async () => {
   const link = elements['leaderboard-body'].children[0].children[1].children[0];
   assert.equal(link.textContent, rows[0].bungie_name);
   assert.match(link.href, /%3Cimg/);
+});
+
+test('read-only legacy leaderboards remain usable until the migration is installed', async () => {
+  indexMissing = true;
+  await boards.loadPowerLeaderboard();
+  assert.equal(reads.at(-1).table, 'highest_character');
+  assert.match(reads.at(-1).fields, /class_type,light_level$/);
+  indexMissing = false;
 });
