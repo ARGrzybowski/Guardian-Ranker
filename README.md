@@ -27,11 +27,15 @@
 Open the Guardian-Ranker webpage in any modern browser.  
 Search for a player’s name and explore the leaderboards and season information.
 
-## Known Issues
+## Search behavior
 
-- **Search Autofill Lag:** The autofill in the search box may display results one character behind what’s typed.  
-- **Common Name Prefixes:** Players with very common prefixes may not appear in results due to Bungie API pagination limits.  
-- **Full Name Search:** Typing a full player name instead of just a prefix can trigger a "No user found" message, even if the account loads successfully.
+Enter the complete Bungie name and four-digit code (for example, `Hawk#7753`) to look up an account directly. Full-name searches use Bungie's exact-name endpoint and do not depend on the account appearing in paginated prefix results.
+
+Partial names show the first page of suggestions. If there are more matches, refine the prefix or enter the full name and code. Typing is debounced, and starting another search cancels the previous one.
+
+Cross-save uses the active membership. For independent platform accounts, the profile with the most recently played public characters is displayed. Private or empty profiles show an explanatory message. Successfully loaded profiles remain visible if leaderboard storage is unavailable.
+
+Leaderboards contain searched players, refreshed when they are searched again. They are not global Destiny rankings. Missing/private metrics do not overwrite existing saved values.
 
 ## Development
 
@@ -41,7 +45,26 @@ If you’d like to run it locally:
 # Clone the repository
 git clone https://github.com/ARGrzybowski/Guardian-Ranker.git
 
-# Open in your browser
 cd Guardian-Ranker
-open index.html   # or just drag index.html into your browser
+npm ci
+npm start
+```
 
+Use the HTTP URL printed by live-server. Opening `index.html` directly from disk can block JavaScript module loading.
+
+## Verification
+
+Run the regression suite with Node.js 20 or newer:
+
+```bash
+node --test tests/*.test.js
+# Or: npm test
+```
+
+Browser integration checks use an installed Microsoft Edge and require no test dependencies:
+
+```bash
+node tests/browser-smoke.mjs
+```
+
+Set `BROWSER_PATH` to use a different Chromium-based browser executable. The browser suite mocks all Bungie and Supabase responses, never writes to the live database, and saves ignored screenshots in `test-artifacts/`.

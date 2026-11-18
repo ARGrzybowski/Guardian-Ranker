@@ -1,10 +1,12 @@
 {
   "name": "guardian-rank",
   "version": "1.0.0",
+  "type": "module",
   "description": "Destiny 2 player stats viewer",
   "main": "index.js",
   "scripts": {
-    "start": "npx live-server"
+    "start": "npx live-server",
+    "test": "node --test tests/*.test.js"
   },
   "devDependencies": {
     "live-server": "^1.2.0"

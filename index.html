@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Guardian Ranker</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -12,13 +13,13 @@
     <p>Enter Bungie.net Username</p>
 
     <div class="search-container">
-      <input type="text" id="nameInput" placeholder="Guardian#1234" autocomplete="on" />
-      <button id="searchBtn" title="Search">➤</button>
+      <input type="text" id="nameInput" placeholder="Guardian#1234" autocomplete="off" aria-label="Bungie name" />
+      <button id="searchBtn" title="Search" aria-label="Search guardians">➤</button>
     </div>
 
     <ul id="suggestions"></ul>
 
-    <div class="results-container" style="display: flex; gap: 20px; flex-wrap: nowrap;">
+    <div class="results-container">
       <!-- Left Side: Player Card -->
       <div id="results" class="user-card" style="flex: 1 1 400px;">
         <!-- PvP / PvE Buttons (Future feature)-->
@@ -73,7 +74,7 @@
             <tr>
               <th>Rank</th>
               <th>Bungie Name</th>
-              <th>Hours Played</th>
+              <th>Time Played</th>
             </tr>
           </thead>
           <tbody id="time-played-body">
@@ -96,6 +97,7 @@
     </div>
   </div>
 
+  </div>
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="global.js"></script>
