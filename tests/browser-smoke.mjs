@@ -144,7 +144,7 @@ try {
       else if (url.includes('/Stats/PostGameCarnageReport/')) body = json({ period: '2026-11-18', entries: [{ player: { destinyUserInfo: { bungieGlobalDisplayName: 'Teammate', bungieGlobalDisplayNameCode: 7 } }, values: basicStats({ kills: 12, deaths: 2, assists: 3, score: 100, team: 1 }), extended: { weapons: [{ referenceId: 901, values: basicStats({ uniqueWeaponKills: 12, uniqueWeaponPrecisionKills: 3 }) }] } }] });
       else if (url.includes('/Stats/AggregateActivityStats/')) {
         if (url.includes('/Character/1/') && !aggregateFailure) { aggregateFailure = true; body = { ErrorCode: 99, Message: 'Aggregate temporarily unavailable' }; }
-        else body = json({ activities: [{ activityHash: 904, values: basicStats({ activityCompletions: 7, activityFastestCompletionSeconds: 600, activityKills: 350, activityDeaths: 7, activitySecondsPlayed: 7200 }) }, { activityHash: 907, values: basicStats({ activityCompletions: 2, activityFastestCompletionSeconds: 0 }) }] });
+        else body = json({ activities: [{ activityHash: 904, values: basicStats({ activityCompletions: 7, fastestCompletionMsForActivity: 600000, activityKills: 350, activityDeaths: 7, activitySecondsPlayed: 7200 }) }, { activityHash: 907, values: basicStats({ activityCompletions: 2, fastestCompletionMsForActivity: 0 }) }] });
       }
       else if (url.includes('/Stats/Activities/')) {
         const page = Number(new URL(url).searchParams.get('page'));

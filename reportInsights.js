@@ -59,7 +59,8 @@ export function aggregateEntries(responses, characters, definitions) {
       const definition = definitions[hash];
       if (definition?.redacted) continue;
       const modes = new Set([...(definition?.activityModeTypes || []), definition?.directActivityModeType].filter(v => v != null));
-      const fastest = statValue(activity.values, 'activityFastestCompletionSeconds');
+      const milliseconds = statValue(activity.values, 'fastestCompletionMsForActivity');
+      const fastest = milliseconds == null ? statValue(activity.values, 'activityFastestCompletionSeconds') : milliseconds / 1000;
       rows.push({ hash, characterId: characters[i].characterId, characterName: CLASSES[characters[i].classType] || 'Guardian',
         name: definition?.displayProperties?.name || `Activity ${hash}`, description: definition?.displayProperties?.description || '',
         category: modes.has(4) ? 'raid' : modes.has(82) ? 'dungeon' : modes.has(16) || modes.has(46) ? 'nightfall' : 'other',

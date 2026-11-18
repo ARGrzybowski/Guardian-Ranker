@@ -44,7 +44,10 @@ try {
     assert.ok(Object.keys(definitions).length > 0, `${section} catalogue`);
     if (section === 'activities') {
       activityRecords = aggregateEntries([aggregates], [character], definitions);
-      if (activityRecords.length) assert.ok(activityRecords.some(r => r.completions != null), 'Aggregate completion counters resolve');
+      if (activityRecords.length) {
+        assert.ok(activityRecords.some(r => r.completions != null), 'Aggregate completion counters resolve');
+        assert.ok(activityRecords.some(r => r.fastest != null), 'Fastest completion milliseconds resolve into seconds');
+      }
     }
     if (section === 'records' || section === 'collections') {
       const entries = catalogueEntries(profile, section, definitions);
@@ -60,6 +63,7 @@ try {
     collectibles: collectionEntries(profile).length,
     progressionVisible: Boolean(profile.characterProgressions?.data), metricsVisible: Boolean(profile.metrics?.data), catalogueCoverage,
     activityRecordCount: activityRecords.length,
+    recordsWithFastestTime: activityRecords.filter(r => r.fastest != null).length,
     aggregateCategories: [...new Set(activityRecords.map(r => r.category))],
     aggregateCounterKeys: Object.keys(aggregates.activities[0]?.values || {}),
     commendationsVisible: Boolean(profile.profileCommendations?.data),

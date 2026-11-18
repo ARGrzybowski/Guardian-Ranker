@@ -47,6 +47,12 @@ test('closest triumphs normalize individual objectives, ignore secrets and unown
   ];
   assert.deepEqual(closestTriumphs(entries).map(e => e.name), ['Almost', 'Halfway']);
 });
+test('Bungie fastest completion milliseconds convert to seconds exactly once', () => {
+  const data = { activities: [{ activityHash: 1, values: stats({ fastestCompletionMsForActivity: 612500, activityFastestCompletionSeconds: 99 }) }] };
+  const [row] = aggregateEntries([data], [{ characterId: '1', classType: 0 }], {});
+  assert.equal(row.fastest, 612.5);
+  assert.equal(durationText(row.fastest), '10m 13s');
+});
 test('match weapon precision percentage uses kills, missing counts are not zero', () => {
   const rows = matchWeapons({ extended: { weapons: [
     { referenceId: 1, values: stats({ uniqueWeaponKills: 20, uniqueWeaponPrecisionKills: 5 }) },
