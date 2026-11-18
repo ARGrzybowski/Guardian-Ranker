@@ -19,7 +19,8 @@ test('authenticated cloud runs use bounded batches and ignore caller-supplied sc
     bungieFactory: () => ({}), index: async value => { options = value; return { status: 'completed' }; } });
   const response = await handler(new Request('https://example.test', { method: 'POST', headers: { 'x-guardian-worker-token': token }, body: '{"triumph_score":99999}' }));
   assert.equal(response.status, 200);
-  assert.equal(options.maxProfiles, 15);
+  assert.equal(options.maxProfiles, 100);
+  assert.equal(options.profileConcurrency, 8);
   assert.equal(options.maxClanPages, 3);
   assert.equal('triumph_score' in options, false);
 });

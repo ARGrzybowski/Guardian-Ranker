@@ -44,4 +44,7 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -f tests/sql/fixture.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/202611180001_guardian_index.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/indexer-capacity.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/leader-refresh.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/indexer.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/capacity.sql

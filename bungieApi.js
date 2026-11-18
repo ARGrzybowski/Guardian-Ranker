@@ -14,8 +14,8 @@ function delay(ms, signal) {
 }
 
 // Retry transient failures, but never scan indefinitely or leave a request hanging.
-export async function bungieRequest(path, { signal, body, apiKey = API_KEY } = {}) {
-  for (let attempt = 0; attempt < 3; attempt++) {
+export async function bungieRequest(path, { signal, body, apiKey = API_KEY, maxAttempts = 3, timeoutMs = 15000 } = {}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     signal?.throwIfAborted();
     let retryAfter = 300 * (attempt + 1);
     try {
@@ -23,24 +23,27 @@ export async function bungieRequest(path, { signal, body, apiKey = API_KEY } = {
         method: body === undefined ? 'GET' : 'POST',
         headers: { 'X-API-Key': apiKey, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(15000)])
+        signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeoutMs)])
       });
       const data = await response.json();
       signal?.throwIfAborted();
       if (response.ok && data.ErrorCode === 1) return data;
 
       const error = new Error(data.Message || `Bungie API error: HTTP ${response.status}`);
+      error.status = response.status;
       error.retryable = response.status === 429 || response.status >= 500 || data.ThrottleSeconds > 0;
       const retryHeader = response.headers?.get('Retry-After');
       const headerDelay = retryHeader ? (Number.isFinite(Number(retryHeader))
         ? Number(retryHeader) * 1000 : Date.parse(retryHeader) - Date.now()) : 0;
       retryAfter = Math.max(retryAfter, (Number(data.ThrottleSeconds) || 0) * 1000, headerDelay || 0);
+      error.retryAfterMs = retryAfter;
+      error.throttled = response.status === 429 || data.ThrottleSeconds > 0;
       // Long throttles should be shown to the user instead of automatically retried early.
       if (retryAfter > 10000) error.retryable = false;
       throw error;
     } catch (error) {
       signal?.throwIfAborted();
-      if (error.retryable === false || attempt === 2) throw error;
+      if (error.retryable === false || attempt === maxAttempts - 1) throw error;
     }
     await delay(retryAfter, signal);
   }
@@ -76,7 +79,7 @@ export async function searchNameSuggestions(prefix, signal) {
   return Response;
 }
 
-export async function loadPlayerProfile(user, signal, request = bungieRequest) {
+export async function loadPlayerProfile(user, signal, request = bungieRequest, components = '100,200,800,900') {
   const memberships = (user.destinyMemberships || []).filter(m =>
     m.membershipId && m.membershipType > 0 && m.membershipType !== 254 &&
     (!m.crossSaveOverride || m.crossSaveOverride === m.membershipType)
@@ -88,7 +91,7 @@ export async function loadPlayerProfile(user, signal, request = bungieRequest) {
     signal?.throwIfAborted();
     try {
       const profileData = await request(
-        `/Destiny2/${membership.membershipType}/Profile/${membership.membershipId}/?components=100,200,800,900`,
+        `/Destiny2/${membership.membershipType}/Profile/${membership.membershipId}/?components=${components}`,
         { signal }
       );
       const characters = Object.values(profileData.Response?.characters?.data || {});

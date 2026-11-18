@@ -11,11 +11,13 @@ export function profileSnapshot({ membership, profileData }) {
   const characters = Object.values(profile.characters.data);
   const user = profile.profile?.data?.userInfo || membership;
   const strongest = characters.reduce((best, char) => Number(char.light) > Number(best.light) ? char : best);
+  const recent = characters.reduce((best, char) => Date.parse(char.dateLastPlayed) > Date.parse(best.dateLastPlayed) ? char : best);
   const minutes = characters.map(char => number(char.minutesPlayedTotal));
   const latest = Math.max(...characters.map(char => Date.parse(char.dateLastPlayed) || 0));
   if (!user.bungieGlobalDisplayName || user.bungieGlobalDisplayNameCode == null) throw new Error('Profile has no Bungie name.');
   return {
     membership_id: String(membership.membershipId), membership_type: membership.membershipType,
+    character_id: String(recent.characterId),
     bungie_name: formatBungieName(user),
     time_played_hours: minutes.every(value => value !== null) ? Math.floor(minutes.reduce((sum, value) => sum + value, 0) / 60) : null,
     triumph_score: number(profile.profileRecords?.data?.lifetimeScore),
@@ -26,42 +28,77 @@ export function profileSnapshot({ membership, profileData }) {
   };
 }
 
-export function createBungieWorker({ apiKey, maxOperations = 300, signal, intervalMs = 500, wait = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
+export function createBungieWorker({ apiKey, maxOperations = 300, signal, intervalMs = 500, stopAt = Infinity, clock = () => Date.now(), wait = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   let operations = 0;
+  let backoffUntil = 0;
+  let slots = Promise.resolve();
   return {
     get operations() { return operations; },
+    get backoffUntil() { return backoffUntil; },
     async request(path, options = {}) {
-      signal?.throwIfAborted();
-      if (operations >= maxOperations) throw new BudgetReached('Bungie operation budget reached.');
-      if (operations++) await wait(intervalMs);
-      return bungieRequest(path, { ...options, signal, apiKey });
+      // Serialize reservations, not HTTP responses: concurrent consumers share
+      // one paced request budget and cannot burst past it.
+      const reservation = slots.then(async () => {
+        signal?.throwIfAborted();
+        if (operations >= maxOperations || clock() >= stopAt || clock() < backoffUntil) throw new BudgetReached('Worker operation, time, or throttle budget reached.');
+        if (operations) await wait(intervalMs);
+        if (clock() >= stopAt || clock() < backoffUntil) throw new BudgetReached('Worker time or throttle budget reached.');
+        operations++;
+      });
+      slots = reservation.catch(() => {});
+      await reservation;
+      try {
+        return await bungieRequest(path, { ...options, signal, apiKey, maxAttempts: 2, timeoutMs: 8000 });
+      } catch (error) {
+        if (error.throttled) {
+          backoffUntil = Math.max(backoffUntil,clock()+Math.max(60000,error.retryAfterMs || 0));
+          throw new BudgetReached('Bungie requested a cooldown.');
+        }
+        throw error;
+      }
     }
   };
 }
 
 // Runs once per invocation. The scheduler lives in GitHub Actions, never on a PC.
-export async function runIndexer({ store, bungie, signal, now = () => new Date(), seedNames = [], seedClans = [], maxProfiles = 100, maxDiscoveries = 25, maxClanPages = 20 }) {
-  const summary = { profiles_attempted: 0, profiles_refreshed: 0, seed_errors: 0, profile_errors: 0, discovery_errors: 0, roster_errors: 0, clans_found: 0, roster_members_seen: 0, roster_pages: 0 };
+export async function runIndexer({ store, bungie, signal, now = () => new Date(), seedNames = [], seedClans = [], maxProfiles = 100, maxDiscoveries = 25, maxClanPages = 20, profileConcurrency = 1, maxActivityScans = 0 }) {
+  const summary = { profiles_attempted: 0, profiles_refreshed: 0, cached_identity_hits: 0, seed_errors: 0, profile_errors: 0, discovery_errors: 0, roster_errors: 0, clans_found: 0, roster_members_seen: 0, roster_pages: 0, activity_scans: 0, activity_errors: 0, activity_members_seen: 0 };
   const runId = await store.start();
   if (!runId) return { status: 'already_running' };
   let status = 'completed';
   const request = bungie.request.bind(bungie);
-  const refreshProfiles = async limit => {
-    // Refresh old due accounts first. Stable due times prevent new clan imports
-    // from starving previously indexed players on later runs.
-    for (const row of await store.dueProfiles(now().toISOString(), limit)) {
+  const refreshOne = async row => {
       summary.profiles_attempted++;
       try {
-        let user;
-        if (row.membership_type == null) user = await searchExactName(row.bungie_name || '', signal, request);
-        else {
+        let user, loaded;
+        let identityCheckedAt = row.identity_checked_at;
+        const cachedIdentity = row.membership_type != null && row.identity_checked_at &&
+          now().getTime() - Date.parse(row.identity_checked_at) < 86400000;
+        if (cachedIdentity) {
+          try {
+            loaded = await loadPlayerProfile({ destinyMemberships: [{ membershipId: row.membership_id, membershipType: row.membership_type }] }, signal, request, '100,200,900');
+            const override = loaded.profileData.Response.profile?.data?.userInfo?.crossSaveOverride;
+            if (override && override !== row.membership_type) loaded = null;
+            else summary.cached_identity_hits++;
+          } catch (error) {
+            if (error instanceof BudgetReached || signal?.aborted) throw error;
+            if (!error.noPublicCharacters && ![400,404].includes(error.status)) throw error;
+          }
+        }
+        if (!loaded && row.membership_type == null) user = await searchExactName(row.bungie_name || '', signal, request);
+        else if (!loaded) {
           const data = await request(`/User/GetMembershipsById/${row.membership_id}/${row.membership_type}/`);
           user = { destinyMemberships: data.Response?.destinyMemberships || [] };
         }
-        const loaded = await loadPlayerProfile(user, signal, request);
+        if (!loaded) {
+          loaded = await loadPlayerProfile(user, signal, request, '100,200,900');
+          identityCheckedAt = now().toISOString();
+        }
         const snapshot = profileSnapshot(loaded);
-        const active = snapshot.last_played && now().getTime() - Date.parse(snapshot.last_played) < 7 * 86400000;
-        await store.save(row.membership_id, snapshot, isoAfter(now(), active ? 6 : 48));
+        snapshot.identity_checked_at = identityCheckedAt;
+        const age = snapshot.last_played ? now().getTime() - Date.parse(snapshot.last_played) : Infinity;
+        const refreshHours = row.is_leader || age < 86400000 ? 0.25 : age < 7 * 86400000 ? 2 : 24;
+        await store.save(row.membership_id, snapshot, isoAfter(now(), refreshHours));
         summary.profiles_refreshed++;
       } catch (error) {
         if (error instanceof BudgetReached || error.databaseFailure || signal?.aborted) throw error;
@@ -70,8 +107,19 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
         // last known snapshot with its original freshness timestamp.
         await store.failProfile(row, isoAfter(now(), Math.min(48, 6 * 2 ** Math.min(row.error_count || 0, 3))), Boolean(error.noPublicCharacters));
       }
-    }
-
+  };
+  const refreshProfiles = async limit => {
+    const rows = await store.dueProfiles(now().toISOString(), limit);
+    let cursor = 0, failure;
+    const consume = async () => {
+      while (!failure && cursor < rows.length) {
+        const row = rows[cursor++];
+        try { await refreshOne(row); } catch (error) { failure ??= error; }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(profileConcurrency, rows.length) }, consume));
+    // All in-flight writes finish before the database lease is released.
+    if (failure) throw failure;
   };
   try {
     for (const name of seedNames) {
@@ -85,7 +133,7 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
     }
     await store.insert('guardian_index_clans', seedClans.map(clan_id => ({ clan_id })));
 
-    await refreshProfiles(maxProfiles);
+    await refreshProfiles(Math.ceil(maxProfiles * 0.75));
 
     for (const row of await store.dueDiscovery(now().toISOString(), maxDiscoveries)) {
       try {
@@ -131,13 +179,37 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
       }
       if (summary.roster_pages >= maxClanPages) break;
     }
+    if (maxActivityScans) {
+      for (const row of await store.dueActivities(now().toISOString(), maxActivityScans)) {
+        try {
+          const history = await request(`/Destiny2/${row.membership_type}/Account/${row.membership_id}/Character/${row.character_id}/Stats/Activities/?count=3&page=0`);
+          const activity = (history.Response?.activities || []).find(item => !item.activityDetails?.isPrivate);
+          const activityId = activity?.activityDetails?.instanceId;
+          if (activityId && /^[0-9]{1,20}$/.test(String(activityId)) && !(await store.activitySeen(String(activityId)))) {
+            const report = await request(`/Destiny2/Stats/PostGameCarnageReport/${activityId}/`);
+            if (!Array.isArray(report.Response?.entries)) throw new Error('Invalid activity report.');
+            const members = [...new Map(report.Response.entries.map(entry => entry.player?.destinyUserInfo).filter(validMember).map(member => [String(member.membershipId), { ...identity(member), source: 'activity' }])).values()];
+            await store.insert('guardian_index', members);
+            await store.insert('guardian_index_activities', [{ activity_id: String(activityId) }]);
+            summary.activity_members_seen += members.length;
+          }
+          summary.activity_scans++;
+          await store.patch('guardian_index', 'membership_id', row.membership_id, { next_activity_scan_at: isoAfter(now(), 6) });
+        } catch (error) {
+          if (error instanceof BudgetReached || error.databaseFailure || signal?.aborted) throw error;
+          summary.activity_errors++;
+          await store.patch('guardian_index', 'membership_id', row.membership_id, { next_activity_scan_at: isoAfter(now(), 1) });
+        }
+      }
+    }
     if (summary.profiles_attempted < maxProfiles) await refreshProfiles(maxProfiles - summary.profiles_attempted);
-    if (summary.profile_errors || summary.discovery_errors || summary.roster_errors || summary.seed_errors) status = 'partial';
+    if (summary.profile_errors || summary.discovery_errors || summary.roster_errors || summary.seed_errors || summary.activity_errors) status = 'partial';
   } catch (error) {
     if (error instanceof BudgetReached) status = 'budget_reached';
     else { status = 'failed'; throw error; }
   } finally {
     summary.bungie_operations = bungie.operations;
+    if (bungie.backoffUntil) await store.backoff(new Date(bungie.backoffUntil).toISOString());
     await store.finish(runId, status, summary);
   }
   return { status, ...summary };
