@@ -20,7 +20,7 @@ test('authenticated cloud runs use bounded batches and ignore caller-supplied sc
   const response = await handler(new Request('https://example.test', { method: 'POST', headers: { 'x-guardian-worker-token': token }, body: '{"triumph_score":99999}' }));
   assert.equal(response.status, 200);
   assert.equal(options.maxProfiles, 100);
-  assert.equal(options.profileConcurrency, 4);
+  assert.equal(options.profileConcurrency, 8);
   assert.equal(options.maxClanPages, 3);
   assert.equal('triumph_score' in options, false);
 });

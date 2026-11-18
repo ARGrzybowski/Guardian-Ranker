@@ -23,7 +23,7 @@ export function createEdgeHandler({ url, key, apiKey = API_KEY, storeFactory = o
       const signal = AbortSignal.timeout(110000);
       const store = storeFactory({ url, key, signal });
       const bungie = bungieFactory({ apiKey, maxOperations: 240, intervalMs: 334, stopAt: Date.now() + 80000, signal });
-      const summary = await index({ store, bungie, signal, maxProfiles: 100, profileConcurrency: 4, maxDiscoveries: 5, maxClanPages: 3, maxActivityScans: 2 });
+      const summary = await index({ store, bungie, signal, maxProfiles: 100, profileConcurrency: 8, maxDiscoveries: 5, maxClanPages: 3, maxActivityScans: 2 });
       console.log(JSON.stringify(summary));
       return Response.json(summary);
     } catch {

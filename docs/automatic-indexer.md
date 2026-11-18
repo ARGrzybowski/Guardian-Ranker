@@ -10,7 +10,7 @@ service, or persistent process is required.
   cursors, run summaries, a worker lease, and aggregate coverage.
 - The worker discovers clans from tracked accounts, imports every roster page,
   and refreshes public profiles independently of website searches.
-- A protected Edge Function processes small batches: up to 100 profile attempts with four concurrent consumers,
+- A protected Edge Function processes small batches: up to 100 profile attempts with eight concurrent consumers,
   five clan lookups, three roster pages, two activity-history scans, and 240 logical
   Bungie operations per run. One shared reservation queue paces calls at about three
   operations per second. New work stops after 80 seconds; a 110-second hard deadline
