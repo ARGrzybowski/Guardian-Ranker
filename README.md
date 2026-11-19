@@ -15,6 +15,7 @@
 - **Player dossier:** Ten sections covering account overview/rating, characters and equipped gear/perks/stats, career PvP/PvE statistics, mode-specific statistics, paginated activity history and match reports, aggregate activity records, searchable triumphs/titles, collections, reputation/metrics/commendations, and player comparison.
 - **Account rating:** Versioned 0–100 scores for eighteen metrics across five dimensions, a weighted 0–1,000 overall rating, grades, activity-family evidence, strongest areas, contribution breakdowns, next milestones, and explicit partial/private-data coverage. [Full scoring methodology](docs/account-rating.md).
 - **Account-rating leaderboard:** Cloud-verified GR-2.0 ratings on both leaderboard pages, automatically backfilled from the indexed population. Legacy metadata and small PvP samples no longer make every rating provisional.
+- **Rating comparison:** Compare two Guardians across all 18 metrics, see which metrics explain the gap, and share the comparison link.
 - **Deeper analysis:** Raid/dungeon activity counters and fastest completions, loaded-history K/D and daily/mode summaries, match weapon breakdowns, closest incomplete triumphs, collectible acquisition sources, and filtered activity-record CSV export.
 - **Share and export:** Stable player links, printable loaded sections, and JSON export of the public profile and loaded report data.
 - **Leaderboards:** Rank Bungie-verified profiles across power, Triumph score, time played, and Guardian Rank. Automatic clan discovery and refresh run in Supabase's cloud.

@@ -93,13 +93,16 @@ searchBtn.addEventListener('click', () => handleSearch(input.value, false));
 
 function renderProfile(user, loaded, version) {
   const { membershipId, membershipType } = loaded.membership;
-  const saveStatus = renderPlayerReport(results, {
-    user, loaded, bungieName: formatBungieName(user), signal: activeController.signal
-  });
+  const bungieName = formatBungieName(user);
   const url = new URL(window.location.href);
-  url.searchParams.set('name', formatBungieName(user));
+  const previousName = url.searchParams.get('name');
+  if (previousName?.toLowerCase() !== bungieName.toLowerCase()) url.searchParams.delete('compare');
+  url.searchParams.set('name', bungieName);
   history.replaceState(null, '', url);
-  document.title = `${formatBungieName(user)} · Guardian Ranker`;
+  const saveStatus = renderPlayerReport(results, {
+    user, loaded, bungieName, signal: activeController.signal
+  });
+  document.title = `${bungieName} · Guardian Ranker`;
   void (async () => {
     try {
       await queueGuardian(membershipId, membershipType);

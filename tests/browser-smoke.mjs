@@ -131,7 +131,7 @@ try {
             dateLastPlayed: '2026-11-18T00:00:00Z', emblemBackgroundPath: '/emblem.png'
           }])) },
           profile: { data: { currentGuardianRank: 11, lifetimeHighestGuardianRank: 11 } },
-          profileRecords: { data: { lifetimeScore: 10000 } },
+          profileRecords: { data: { lifetimeScore: id === 'rival' ? 25000 : 10000 } },
           profileCollectibles: { data: { collectibles: { 1: { state: 0 }, 2: { state: 1 } } } },
           characterEquipment: { data: { 0: { items: [{ itemHash: 901, itemInstanceId: '10001' }] } } },
           itemComponents: { instances: { data: { 10001: { primaryStat: { value: 402 }, damageType: 3 } } }, sockets: { data: { 10001: { sockets: [{ plugHash: 902, isEnabled: true }] } } }, stats: { data: { 10001: { stats: { 905: { value: 78 } } } } } },
@@ -151,7 +151,8 @@ try {
         const page = Number(new URL(url).searchParams.get('page'));
         if (page === 1 && url.includes('/Character/1/') && !historyFailure) { historyFailure = true; body = { ErrorCode: 99, Message: 'History temporarily unavailable' }; }
         else body = json({ activities: Array.from({ length: page === 0 ? 25 : page === 1 ? 1 : 0 }, (_, i) => ({ period: '2026-11-18', activityDetails: { instanceId: String(page * 25 + i + 1), referenceId: 904, mode: 4 }, values: basicStats({ completed: 1, kills: 50, deaths: 2, activityDurationSeconds: 600 }) })) });
-      } else if (url.includes('/Stats/')) body = url.includes('/Character/') ? json({ raid: { allTime: basicStats({ kills: 100, deaths: 10, activitiesEntered: 20, activitiesWon: 15 }) } }) : json({ mergedAllCharacters: { results: { allPvP: { allTime: basicStats({ kills: 200, precisionKills: 80, deaths: 100, assists: 50, activitiesEntered: 100, activitiesWon: 60, secondsPlayed: 7200 }) }, allPvE: { allTime: basicStats({ kills: 1000, precisionKills: 300, deaths: 10, activitiesEntered: 50, activitiesWon: 45 }) } } } });
+      } else if (url.includes('/Account/partial/Stats/?')) body = { ErrorCode: 99, Message: 'Career statistics unavailable' };
+      else if (url.includes('/Stats/')) body = url.includes('/Character/') ? json({ raid: { allTime: basicStats({ kills: 100, deaths: 10, activitiesEntered: 20, activitiesWon: 15 }) } }) : json({ mergedAllCharacters: { results: { allPvP: { allTime: basicStats({ kills: 200, precisionKills: 80, deaths: 100, assists: 50, activitiesEntered: 100, activitiesWon: 60, secondsPlayed: 7200 }) }, allPvE: { allTime: basicStats({ kills: 1000, precisionKills: 300, deaths: 10, activitiesEntered: 50, activitiesWon: 45 }) } } } });
       else if (/\/Manifest\/Destiny\w+Definition\/\d+\//.test(url)) body = json({ displayProperties: { name: url.includes('/901/') ? 'Test Rifle' : url.includes('/902/') ? 'Test Perk' : url.includes('/903/') ? 'Vanguard Reputation' : url.includes('/905/') ? 'Handling' : url.includes('/906/') ? 'Ally' : 'Test Raid', description: 'Public definition', icon: '/icon.png' }, inventory: { tierType: 6 }, itemTypeDisplayName: 'Scout Rifle' });
       else if (url.includes('/Manifest/')) body = json({ jsonWorldComponentContentPaths: { en: { DestinySeasonDefinition: '/seasons.json', DestinyRecordDefinition: '/records.json', DestinyCollectibleDefinition: '/collectibles.json', DestinyMetricDefinition: '/metrics.json', DestinyProgressionDefinition: '/progressions.json', DestinyActivityDefinition: '/activities.json' } } });
       else if (url.includes('/Settings/')) body = json({ destiny2CoreSettings: { currentSeasonHash: 1 } });
@@ -289,9 +290,17 @@ try {
   await waitFor("document.querySelector('#report-progression').textContent.includes('Ally')");
   await evaluate("document.querySelector('.load-metrics').click()");
   await waitFor("document.querySelector('.metric-rows')?.textContent.includes('Raid completions')");
-  await openSection('compare', "document.querySelector('.compare-form') != null");
+  await openSection('rating', "document.querySelector('.rating-compare') != null");
+  await evaluate("document.querySelector('.rating-compare').click()");
+  await waitFor("document.activeElement === document.querySelector('.compare-form input')");
+  const primaryStatsRequests = apiCalls.filter(url => url.includes('/Account/hawk/') && url.includes('/Stats/')).length;
   await evaluate("document.querySelector('.compare-form input').value = 'Rival#1234'; document.querySelector('.compare-form').requestSubmit()");
-  await waitFor("document.querySelector('.comparison-result').textContent.includes('Rival#1234')");
+  await waitFor("document.querySelector('.comparison-status').textContent === 'Comparison ready.'");
+  assert.equal(await evaluate("document.querySelectorAll('.comparison-ratings meter').length"), 10);
+  assert.equal(await evaluate("document.querySelectorAll('.compare-metrics tbody tr').length"), 18);
+  assert.ok(await evaluate("document.querySelector('.compare-drivers').textContent.includes('24 overall points in favor of Rival#1234')"));
+  assert.equal(primaryStatsRequests, apiCalls.filter(url => url.includes('/Account/hawk/') && url.includes('/Stats/')).length, 'Comparison reuses current player rating data');
+  assert.equal(await evaluate("new URL(location.href).searchParams.get('compare')"), 'Rival#1234');
   assert.equal(await evaluate('window.__writes.length'), 1, 'Comparison does not submit profile scores or queue extra accounts');
   await evaluate("window.__createObjectURL = URL.createObjectURL; URL.createObjectURL = blob => { window.__exportText = blob.text(); return window.__createObjectURL(blob); }; HTMLAnchorElement.prototype.click = function() {}; document.querySelector('#downloadRawBtn').click()");
   const exported = JSON.parse(await evaluate('window.__exportText'));
@@ -304,6 +313,9 @@ try {
   assert.equal(exported.sections.accountRating.version, 'GR-2.0');
   assert.equal(exported.sections.accountRating.overall.coverage, 100);
   assert.equal(exported.sections.accountRating.overall.provisional, false);
+  assert.equal(exported.sections.comparison.rating.version, 'GR-2.0');
+  assert.ok(Math.abs(exported.sections.comparison.rating.overallDifference + 24) < 1e-8);
+  assert.equal(exported.sections.comparison.rating.metrics.find(m => m.id === 'triumphs').overallPointDifference, -24);
   await evaluate("document.querySelector('[data-section=overview]').click()");
   await evaluate('window.scrollTo(0, 0)');
   const reportDesktop = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
@@ -367,6 +379,10 @@ try {
   await cdp('Page.navigate', { url: `${origin}/?name=Hawk%237753#rating` });
   await waitFor("document.querySelectorAll('.rating-metric').length === 18 && document.querySelector('.rating-coverage').textContent.includes('100%')");
   assert.equal(await evaluate("document.querySelector('#report-rating').hidden"), false, 'Shared rating links open and calculate the correct section');
+  await cdp('Page.navigate', { url: `${origin}/?name=Hawk%237753&compare=Partial%231234#compare` });
+  await waitFor("document.querySelector('.comparison-ratings')?.textContent.includes('Partial#1234') && document.querySelector('.comparison-status').textContent === 'Comparison ready.'");
+  assert.equal(await evaluate("document.querySelector('.comparison-ratings tbody tr td:last-child').textContent"), '—', 'A provisional score cannot determine an overall lead');
+  assert.ok(await evaluate("!document.querySelector('#report-compare').hidden && document.documentElement.scrollWidth <= window.innerWidth"), 'Shared comparison loads without page overflow on mobile');
   await cdp('Emulation.clearDeviceMetricsOverride');
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html` });
   await waitFor("document.querySelectorAll('#highest-character-body tr a').length === 5");

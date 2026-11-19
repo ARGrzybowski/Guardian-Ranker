@@ -1,11 +1,11 @@
 import { escapeHtml as e } from './html.js';
 import { bungieImage, createManifestClient, mapConcurrent } from './manifest.js';
-import { CLASSES, PLATFORMS, ACTIVITY_MODES, REPORT_COMPONENTS, overviewStats, characterSummary, dateText, numeric, statValue, careerGroups, summarizeCareer, catalogueEntries, filterCatalogue, mergeActivities, createReportApi } from './reportData.js';
-import { searchExactName, loadPlayerProfile, formatBungieName } from './bungieApi.js';
+import { CLASSES, PLATFORMS, ACTIVITY_MODES, overviewStats, characterSummary, dateText, numeric, statValue, careerGroups, summarizeCareer, catalogueEntries, filterCatalogue, mergeActivities, createReportApi } from './reportData.js';
 import { closestTriumphs, objectiveCompletion, activityInsights } from './reportInsights.js';
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
-import { renderAccountRating } from './ratingView.js';
+import { createAccountRatingLoader, renderAccountRating } from './ratingView.js';
 import { RATING_METRICS } from './accountRating.js';
+import { renderPlayerComparison } from './comparisonView.js';
 
 const number = (value, digits = 0) => numeric(value) == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const tile = (label, value) => `<div class="report-stat"><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`;
@@ -28,6 +28,19 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   const characters = characterSummary(profile);
   const summary = overviewStats(profile);
   const api = createReportApi(membership), manifest = createManifestClient();
+  const catalogs = new Map();
+  const ratingManifest = {
+    table(type) {
+      if (!catalogs.has(type)) {
+        catalogs.set(type, manifest.table(type, signal).catch(error => {
+          catalogs.delete(type);
+          throw error;
+        }));
+      }
+      return catalogs.get(type);
+    }
+  };
+  const loadRating = createAccountRatingLoader({ profile, characters, api, manifest: ratingManifest, signal });
   const generatedAt = new Date().toISOString();
   const exported = { schemaVersion: 1, bungieName, membership, generatedAt, profile: profileData, sections: {} };
   const sections = { overview: 'Overview', rating: 'Account rating', characters: 'Characters & gear', career: 'PvP & PvE', activities: 'Activity history', endgame: 'Activity records', records: 'Triumphs & titles', collections: 'Collections', progression: 'Progression & metrics', compare: 'Compare players' };
@@ -64,6 +77,9 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   ratingPreview.querySelector('button').addEventListener('click', () => container.querySelector('.report-nav [data-section=rating]').click());
   container.querySelector('[data-action=share]').addEventListener('click', async () => {
     nameUrl.hash = window.location.hash;
+    const compared = nameUrl.hash === '#compare' && exported.sections.comparison?.name;
+    if (compared) nameUrl.searchParams.set('compare', compared);
+    else nameUrl.searchParams.delete('compare');
     try { await navigator.clipboard.writeText(nameUrl.href); shareStatus.textContent = 'Report link copied.'; }
     catch { shareStatus.textContent = `Report link: ${nameUrl.href}`; }
   });
@@ -85,7 +101,11 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     } finally { if (isCurrent()) target.removeAttribute('aria-busy'); }
   }
   const initialized = new Set(['overview']);
-  const loaders = { rating: () => renderAccountRating(panel('rating'), { profile, characters, api, manifest, signal, onResult: rating => {
+  const loaders = { rating: () => renderAccountRating(panel('rating'), { loadRating, signal,
+    onCompare: () => {
+      container.querySelector('.report-nav [data-section=compare]').click();
+      panel('compare').querySelector('input')?.focus();
+    }, onResult: rating => {
     exported.sections.accountRating = rating;
     ratingPreview.querySelector('.rating-preview-value').textContent = rating.overall.score == null ? `Unrated · ${rating.overall.coverage}% coverage` : `${Math.floor(rating.overall.score)} / 1,000 · ${rating.overall.provisional ? 'Provisional' : rating.overall.tier.name}`;
     ratingPreview.querySelector('button').textContent = 'View rating breakdown';
@@ -316,30 +336,21 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     });
   }
 
-  async function loadComparison() {
-    const target = panel('compare');
-    target.innerHTML = `<h3>Compare Guardians</h3>${note('Compare the same public profile measurements side by side. These are raw statistics, not a skill rating or a global percentile.')}<form class="compare-form report-filters"><label>Full Bungie name<input type="text" name="guardian" placeholder="Guardian#1234" required autocomplete="off"></label><button type="submit">Compare players</button></form><div class="comparison-result"></div>`;
-    const form = target.querySelector('form'), result = target.querySelector('.comparison-result');
-    form.addEventListener('submit', event => {
-      event.preventDefault();
-      const name = form.elements.guardian.value.trim(), button = form.querySelector('button');
-      button.disabled = true; result.innerHTML = note('Loading comparison profile…');
-      void withState(result, async () => {
-        try {
-          const otherUser = await searchExactName(name, signal);
-          const other = await loadPlayerProfile(otherUser, signal, undefined, REPORT_COMPONENTS);
-          signal.throwIfAborted();
-          const otherName = formatBungieName(otherUser), stats = overviewStats(other.profileData.Response);
-          const metrics = { rank: 'Guardian Rank', highestRank: 'Highest Guardian Rank', power: 'Highest equipped power', hours: 'Character time (hours)', triumphScore: 'Lifetime Triumph score', activeScore: 'Active Triumph score', collectionAcquired: 'Collections acquired', commendationScore: 'Commendation score' };
-          exported.sections.comparison = { name: otherName, membership: other.membership, summary: stats, comparedAt: new Date().toISOString() };
-          result.innerHTML = `<div class="report-table-wrap"><table class="report-table"><caption>Public profile comparison</caption><thead><tr><th>Measurement</th><th>${e(bungieName)}</th><th>${e(otherName)}</th><th>Difference (first − second)</th></tr></thead><tbody>${Object.entries(metrics).map(([key, label]) => {
-            const left = key === 'collectionAcquired' && !summary.hasCollections ? null : summary[key];
-            const right = key === 'collectionAcquired' && !stats.hasCollections ? null : stats[key];
-            const difference = left == null || right == null ? null : left - right;
-            return `<tr><th>${e(label)}</th><td>${e(number(left))}</td><td>${e(number(right))}</td><td>${difference != null && difference > 0 ? '+' : ''}${e(number(difference))}</td></tr>`;
-          }).join('')}</tbody></table></div><a href="?${new URLSearchParams({ name: otherName }).toString()}">Open ${e(otherName)}’s full report →</a>`;
-        } finally { button.disabled = false; }
-      });
+  function loadComparison() {
+    renderPlayerComparison(panel('compare'), {
+      primary: { name: bungieName, membership, summary }, loadPrimaryRating: loadRating,
+      manifest: ratingManifest, signal, initialName: new URLSearchParams(window.location.search).get('compare'),
+      onResult(comparison) {
+        const url = new URL(window.location.href);
+        if (comparison) {
+          exported.sections.comparison = comparison;
+          url.searchParams.set('compare', comparison.name);
+        } else {
+          delete exported.sections.comparison;
+          url.searchParams.delete('compare');
+        }
+        history.replaceState(null, '', url);
+      }
     });
   }
   const linkedSection = window.location.hash.slice(1);

@@ -13,7 +13,7 @@ The report aims to expose a useful, inspectable account dossier from public Bung
 | Triumphs & titles | Search every exposed triumph by name/description; completed/incomplete/redeemed states; objective counters and normalized progress; closest incomplete triumph ordering; filter equippable titles; obscured triumph handling |
 | Collections | Search exposed collectible names/descriptions and acquisition sources; acquired/missing filters; profile and character state merge |
 | Progression & metrics | Named public reputation/progression counters, levels, next-level progress and resets; searchable named Bungie metric counters; commendation total and category scores/percentages |
-| Comparison | Compare two players' equivalent public overview measurements and differences; open the second player's report |
+| Comparison | Compare two players’ overall rating, five dimensions, 18 metric scores, weighted point differences, and raw profile statistics. Share a link that opens both accounts. |
 | Sharing | Stable `?name=Guardian%231234` URLs; copy link; print loaded content; JSON export with retrieval time, schema version, profile response, and loaded sections |
 
 ## Sources and semantics

@@ -5,7 +5,7 @@ const n = (v, decimals = 1) => v == null ? 'Unavailable' : Number(v).toLocaleStr
 const scoreText = v => n(v == null ? null : Math.floor(v * 10) / 10);
 const note = text => `<p class="report-note">${e(text)}</p>`;
 
-export async function renderAccountRating(target, { profile, characters, api, manifest, signal, onResult }) {
+export function createAccountRatingLoader({ profile, characters, api, manifest, signal }) {
   const requests = [
     { id: 'career', name: 'Career combat statistics', run: () => api.career(signal) },
     { id: 'records', name: 'Title definitions', run: () => manifest.table('DestinyRecordDefinition', signal) },
@@ -13,8 +13,16 @@ export async function renderAccountRating(target, { profile, characters, api, ma
     ...characters.map((c, i) => ({ id: `character-${i}`, name: `Character ${i + 1} activity counters`, run: () => api.aggregates(c.characterId, signal) }))
   ];
   const states = new Map();
-  async function load() {
-    target.setAttribute('aria-busy', 'true');
+  let current, inFlight;
+  return function load({ retry = false } = {}) {
+    signal.throwIfAborted();
+    if (inFlight) return inFlight;
+    if (current && !retry) return Promise.resolve(current);
+    inFlight = calculate().finally(() => { inFlight = null; });
+    return inFlight;
+  };
+
+  async function calculate() {
     const pending = requests.filter(r => !states.get(r.id)?.ok);
     const results = await Promise.allSettled(pending.map(r => r.run()));
     signal.throwIfAborted();
@@ -25,9 +33,22 @@ export async function renderAccountRating(target, { profile, characters, api, ma
       aggregates: characters.map((_, i) => states.get(`character-${i}`)?.data) });
     rating.calculatedAt = new Date().toISOString();
     rating.sourceStatus = requests.map(r => ({ name: r.name, available: Boolean(states.get(r.id)?.ok), error: states.get(r.id)?.message || null }));
-    onResult(rating);
-    draw(rating);
-    target.removeAttribute('aria-busy');
+    current = rating;
+    return rating;
+  }
+}
+
+export async function renderAccountRating(target, { loadRating, signal, onResult, onCompare }) {
+  async function load(retry = false) {
+    target.setAttribute('aria-busy', 'true');
+    try {
+      const rating = await loadRating({ retry });
+      signal.throwIfAborted();
+      onResult(rating);
+      draw(rating);
+    } finally {
+      target.removeAttribute('aria-busy');
+    }
   }
 
   function draw(rating) {
@@ -36,6 +57,7 @@ export async function renderAccountRating(target, { profile, characters, api, ma
     const failed = rating.sourceStatus.filter(s => !s.available);
     target.innerHTML = `<p class="eyebrow">GUARDIAN ACCOUNT RATING · ${e(RATING_VERSION)}</p><h3>A complete picture of account achievement</h3>
       ${note(`${rating.metrics.length} metric ratings across five dimensions combine into a 0–1,000 account rating. This measures public achievements and experience against editorial benchmarks, not global standing or matchmaking skill.`)}
+      <button class="rating-compare" type="button">Compare with another Guardian</button>
       <div class="rating-hero"><div><p class="rating-label">${label}</p><div class="overall-rating-score">${overall.score == null ? 'Unrated' : e(scoreText(overall.score))}<span>${overall.score == null ? '' : ' / 1,000'}</span></div><p class="rating-tier">${overall.tier ? `${e(overall.tier.grade)} · ${e(overall.tier.name)}` : 'Provisional · no overall grade assigned'}</p></div>
       <div class="rating-coverage"><strong>${n(overall.coverage, 0)}% metric-weight coverage</strong>${note(`${rating.metrics.filter(m => m.status === 'rated').length} of ${rating.metrics.length} metrics fully rated. Calculated ${new Date(rating.calculatedAt).toLocaleString()}.`)}${!overall.complete ? note(`Unresolved-data range: ${scoreText(overall.range.min)}–${scoreText(overall.range.max)} / 1,000. This is a missing-data bound, not a statistical confidence interval.`) : ''}</div></div>
       ${overall.reasons.map(note).join('')}${rating.endgameCoverage.unclassified ? note(`${rating.endgameCoverage.unclassified} historical activity records are outside the recognized endgame catalog and excluded. They do not make the account provisional.`) : ''}${!overall.complete ? note('Private or failed metrics stay unrated. A provisional score appears once public data covers 70% of metric weight. It shows the midpoint of the possible range.') : ''}
@@ -58,9 +80,13 @@ export async function renderAccountRating(target, { profile, characters, api, ma
       <p>Partial endgame counters or unresolved title definitions provide only a lower bound and never silently become zero. Unavailable weights expand the missing-data range. Hiding a weak metric cannot create a complete high-grade rating.</p>
       <p>Power, total playtime, activity speed and recent login do not earn points: power changes across releases, playtime includes idle time, and checkpoint times are not comparable full runs. Raid/dungeon counters can include checkpoints. Collections include cosmetics. Commendations can reset or be farmed, so their weight is 2%.</p>
       <p>This model has not been population calibrated. Future benchmark changes require a new scoring version; compare accounts only under the same version and coverage rules.</p></details>`;
+    target.querySelector('.rating-compare').addEventListener('click', onCompare);
     target.querySelector('.rating-retry')?.addEventListener('click', event => {
       event.currentTarget.disabled = true;
-      void load().catch(error => { if (!signal.aborted) target.querySelector('.rating-source-errors').insertAdjacentHTML('beforeend', note(error.message)); });
+      void load(true).catch(error => {
+        if (signal.aborted) return;
+        target.querySelector('.rating-source-errors')?.insertAdjacentHTML('beforeend', note(error.message));
+      });
     }, { once: true });
   }
 
