@@ -565,6 +565,34 @@ ul#suggestions li:hover {
 .gear-stats { margin-top: 8px; }
 .match-weapons { padding-top: 20px; border-top: 1px solid var(--report-border); }
 .record-coverage { margin: 15px 0; }
+.account-rating-preview { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; border: 1px solid #658a7a; border-radius: 8px; padding: 20px; margin: 10px 0 30px; background: #172e29; }
+.rating-preview-value { margin: 0; font-weight: 600; line-height: 1.5; }
+.rating-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; padding: 26px; margin: 25px 0; background: #112b28; border: 1px solid #658a7a; border-radius: 10px; align-items: center; }
+.rating-label { color: var(--report-muted); font-size: .85rem; }
+.overall-rating-score { font-size: clamp(2.3rem, 6vw, 4rem); font-weight: 700; color: #baf6dc; }
+.overall-rating-score span { font-size: 1rem; color: var(--report-muted); font-weight: 400; }
+.rating-tier { color: #e6d6a7; font-weight: 600; line-height: 1.6; }
+.rating-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; margin: 25px 0; }
+.rating-metric { padding: 22px; border: 1px solid var(--report-border); border-radius: 8px; background: #111923; min-width: 0; }
+.rating-metric-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+.rating-metric-heading span { color: var(--report-muted); font-size: .8rem; }
+.metric-rating-score { font-size: 2rem; font-weight: 700; margin-top: 14px; color: #c0efd9; }
+.metric-rating-score small { font-size: .8rem; color: var(--report-muted); font-weight: 400; }
+.rating-grade { color: #e6d6a7; font-size: .85rem; }
+.rating-metric meter { width: 100%; height: 14px; accent-color: #a9efce; margin: 10px 0; }
+.rating-metric > p { font-size: .87rem; line-height: 1.6; }
+.metric-contribution { border-top: 1px solid var(--report-border); padding-top: 12px; }
+.rating-source-errors { padding: 16px; border: 1px solid #997e50; border-radius: 8px; }
+.rating-source-errors details { margin-top: 15px; }
+.rating-source-errors li { line-height: 1.8; font-size: .85rem; }
+.rating-methodology { border-top: 1px solid var(--report-border); padding: 25px 0; }
+.rating-methodology p { font-size: .87rem; line-height: 1.7; }
+@media (max-width: 600px) { .rating-hero { grid-template-columns: 1fr; padding: 18px; gap: 10px; } .rating-metric { padding: 18px; } }
+@media print {
+  .rating-hero, .rating-metric, .account-rating-preview { background: white; color: black; border-color: #aaa; }
+  .overall-rating-score, .metric-rating-score, .rating-tier, .rating-grade, .rating-label, .rating-metric-heading span { color: black; }
+  .rating-metric { break-inside: avoid; }
+}
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @media (max-width: 600px) {
   .report-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

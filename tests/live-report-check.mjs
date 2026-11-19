@@ -5,6 +5,7 @@ import { searchExactName, loadPlayerProfile } from '../bungieApi.js';
 import { REPORT_COMPONENTS, overviewStats, createReportApi, careerGroups, collectionEntries, recordEntries, catalogueEntries } from '../reportData.js';
 import { createManifestClient } from '../manifest.js';
 import { aggregateEntries } from '../reportInsights.js';
+import { calculateAccountRating } from '../accountRating.js';
 
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Live verification runs in GitHub Actions, not on your machine.');
 const controller = new AbortController();
@@ -38,10 +39,12 @@ try {
     assert.ok(Array.isArray(match.entries), 'Match report entries schema');
   }
   const catalogueCoverage = {};
-  let activityRecords = [];
+  let activityRecords = [], ratingRecordDefinitions, ratingActivityDefinitions;
   for (const [section, type] of [['records', 'DestinyRecordDefinition'], ['collections', 'DestinyCollectibleDefinition'], ['metrics', 'DestinyMetricDefinition'], ['progression', 'DestinyProgressionDefinition'], ['activities', 'DestinyActivityDefinition']]) {
     const definitions = await manifest.table(type, signal);
     assert.ok(Object.keys(definitions).length > 0, `${section} catalogue`);
+    if (section === 'records') ratingRecordDefinitions = definitions;
+    if (section === 'activities') ratingActivityDefinitions = definitions;
     if (section === 'activities') {
       activityRecords = aggregateEntries([aggregates], [character], definitions);
       if (activityRecords.length) {
@@ -56,6 +59,15 @@ try {
       catalogueCoverage[section] = { exposed: entries.length, named };
     }
   }
+  const ratingCharacters = Object.values(profile.characters.data);
+  const ratingAggregates = await Promise.all(ratingCharacters.map(c => c.characterId === character.characterId ? aggregates : api.aggregates(c.characterId, signal)));
+  const accountRating = calculateAccountRating({ profile, career, characters: ratingCharacters, aggregates: ratingAggregates, recordDefinitions: ratingRecordDefinitions, activityDefinitions: ratingActivityDefinitions });
+  assert.equal(accountRating.metrics.length, 10);
+  assert.ok(accountRating.metrics.every(m => m.score == null || Number.isFinite(m.score) && m.score >= 0 && m.score <= 100));
+  assert.ok(accountRating.overall.range.min >= 0 && accountRating.overall.range.max <= 1000);
+  if (accountRating.overall.score != null) assert.ok(accountRating.overall.score >= accountRating.overall.range.min - 1e-8 && accountRating.overall.score <= accountRating.overall.range.max + 1e-8, 'Displayed rating stays within its evidence bounds');
+  console.log(JSON.stringify({ ratingVersion: accountRating.version, overall: accountRating.overall,
+    metrics: accountRating.metrics.map(m => ({ id: m.id, value: m.value, score: m.score, status: m.status })), endgameCoverage: accountRating.endgameCoverage }));
   console.log(JSON.stringify({
     account: 'Hawk#7753', characters: Object.keys(profile.characters.data).length,
     careerGroups: Object.keys(careerGroups(career)), historyRows: history.activities?.length || 0,
