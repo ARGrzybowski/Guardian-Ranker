@@ -58,6 +58,20 @@ export class IndexStore {
   async activitySeen(id) {
     return (await this.select('guardian_index_activities', { select: 'activity_id', activity_id: `eq.${id}`, limit: 1 })).length > 0;
   }
+  dueRatings(now, limit, version) { return this.rpc('get_guardian_ratings_due', { p_now: now, p_limit: limit, p_version: version }); }
+  async ratingManifest() { return (await this.select('guardian_rating_manifest', { select: 'payload', singleton: 'eq.true' }))[0]?.payload; }
+  saveRatingManifest(payload) { return this.request('guardian_rating_manifest?on_conflict=singleton', { method: 'POST', body: { singleton: true, payload }, prefer: 'resolution=merge-duplicates,return=minimal' }); }
+  saveRating(id, rating, manifestVersion, nextRating) {
+    return this.request('guardian_account_ratings?on_conflict=membership_id', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', body: {
+      membership_id: id, score: rating.overall.score, grade: rating.overall.tier?.grade || null, rating_version: rating.version,
+      coverage: rating.overall.coverage, provisional: rating.overall.provisional, last_rated_at: new Date().toISOString(), next_rating_at: nextRating,
+      lower_bound: rating.overall.range.min, upper_bound: rating.overall.range.max, manifest_version: manifestVersion, error_count: 0, last_error: null,
+      metric_scores: rating.metrics.map(m => ({ id: m.id, value: m.value, score: m.score, status: m.status, weight: m.weight, grade: m.tier?.grade || null }))
+    } });
+  }
+  failRating(row, nextRating, isPrivate) {
+    return this.rpc('fail_guardian_rating', { p_id: row.membership_id, p_next: nextRating, p_private: isPrivate });
+  }
   save(requestedId, snapshot, nextRefresh) {
     return this.rpc('save_guardian_snapshot', { p_requested_id: requestedId, p_snapshot: snapshot, p_next_refresh_at: nextRefresh });
   }

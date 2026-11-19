@@ -1,6 +1,7 @@
 import { API_KEY } from '../bungieApi.js';
 import { IndexStore } from './store.mjs';
 import { createBungieWorker, runIndexer } from './indexer.mjs';
+import { createRatingRunner } from './ratings.mjs';
 
 function sameToken(left, right) {
   if (!left || !right || left.length !== right.length) return false;
@@ -11,6 +12,7 @@ function sameToken(left, right) {
 
 export function createEdgeHandler({ url, key, apiKey = API_KEY, storeFactory = options => new IndexStore(options), bungieFactory = options => createBungieWorker(options), index = runIndexer }) {
   let tokenPromise;
+  const rateProfiles = createRatingRunner();
   return async request => {
     if (request.method !== 'POST') return new Response('POST required', { status: 405 });
     const provided = request.headers.get('x-guardian-worker-token');
@@ -23,7 +25,7 @@ export function createEdgeHandler({ url, key, apiKey = API_KEY, storeFactory = o
       const signal = AbortSignal.timeout(110000);
       const store = storeFactory({ url, key, signal });
       const bungie = bungieFactory({ apiKey, maxOperations: 240, intervalMs: 334, stopAt: Date.now() + 80000, signal });
-      const summary = await index({ store, bungie, signal, maxProfiles: 100, profileConcurrency: 8, maxDiscoveries: 5, maxClanPages: 3, maxActivityScans: 2 });
+      const summary = await index({ store, bungie, signal, maxProfiles: 100, profileConcurrency: 8, maxDiscoveries: 5, maxClanPages: 3, maxActivityScans: 2, maxRatings: 10, rateProfiles });
       console.log(JSON.stringify(summary));
       return Response.json(summary);
     } catch {

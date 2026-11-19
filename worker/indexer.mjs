@@ -35,6 +35,14 @@ export function createBungieWorker({ apiKey, maxOperations = 300, signal, interv
   return {
     get operations() { return operations; },
     get backoffUntil() { return backoffUntil; },
+    async staticJson(path) {
+      if (typeof path !== 'string' || !path.startsWith('/common/destiny2_content/json/en/')) throw new Error('Invalid Bungie catalog path.');
+      signal?.throwIfAborted();
+      if (clock() >= stopAt) throw new BudgetReached('Worker time budget reached.');
+      const response = await fetch(`https://www.bungie.net${path}`, { signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(30000)]) });
+      if (!response.ok) throw new Error('Bungie catalog download failed.');
+      return response.json();
+    },
     async request(path, options = {}) {
       // Serialize reservations, not HTTP responses: concurrent consumers share
       // one paced request budget and cannot burst past it.
@@ -61,7 +69,7 @@ export function createBungieWorker({ apiKey, maxOperations = 300, signal, interv
 }
 
 // Runs once per invocation. The scheduler lives in GitHub Actions, never on a PC.
-export async function runIndexer({ store, bungie, signal, now = () => new Date(), seedNames = [], seedClans = [], maxProfiles = 100, maxDiscoveries = 25, maxClanPages = 20, profileConcurrency = 1, maxActivityScans = 0 }) {
+export async function runIndexer({ store, bungie, signal, now = () => new Date(), seedNames = [], seedClans = [], maxProfiles = 100, maxDiscoveries = 25, maxClanPages = 20, profileConcurrency = 1, maxActivityScans = 0, maxRatings = 0, rateProfiles }) {
   const summary = { profiles_attempted: 0, profiles_refreshed: 0, cached_identity_hits: 0, seed_errors: 0, profile_errors: 0, discovery_errors: 0, roster_errors: 0, clans_found: 0, roster_members_seen: 0, roster_pages: 0, activity_scans: 0, activity_errors: 0, activity_members_seen: 0 };
   const runId = await store.start();
   if (!runId) return { status: 'already_running' };
@@ -122,6 +130,15 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
     if (failure) throw failure;
   };
   try {
+    if (maxRatings && rateProfiles) {
+      try {
+        Object.assign(summary, await rateProfiles({ store, bungie, signal, now, limit: maxRatings }));
+        if (summary.rating_manifest_prepared) return { status, ...summary };
+      } catch (error) {
+        if (error instanceof BudgetReached || error.databaseFailure || signal?.aborted) throw error;
+        summary.rating_errors = (summary.rating_errors || 0) + 1;
+      }
+    }
     for (const name of seedNames) {
       try {
         const user = await searchExactName(name, signal, request);
@@ -203,7 +220,7 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
       }
     }
     if (summary.profiles_attempted < maxProfiles) await refreshProfiles(maxProfiles - summary.profiles_attempted);
-    if (summary.profile_errors || summary.discovery_errors || summary.roster_errors || summary.seed_errors || summary.activity_errors) status = 'partial';
+    if (summary.profile_errors || summary.discovery_errors || summary.roster_errors || summary.seed_errors || summary.activity_errors || summary.rating_errors || summary.ratings_partial) status = 'partial';
   } catch (error) {
     if (error instanceof BudgetReached) status = 'budget_reached';
     else { status = 'failed'; throw error; }

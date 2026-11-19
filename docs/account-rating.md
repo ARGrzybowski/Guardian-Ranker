@@ -1,4 +1,14 @@
-# Guardian Account Rating — GR-1.0
+# Guardian Account Rating — GR-1.1
+
+GR-1.1 fixes the blanket provisional status in GR-1.0. Retired/unclassified activity and title records are outside the recognized scoring catalog; their absence no longer withholds an account grade. Small PvP samples keep their moderated metric and evidence note without invalidating the rest of the account. Genuine missing public inputs still produce partial results.
+
+## Cloud leaderboard
+
+The main page and all-leaderboards page include Account Rating, sorted by unrounded cloud-verified scores and membership ID for ties. Displayed scores are truncated to one decimal. Links open the rating report. Coverage counts identify how many indexed accounts have been rated and how many are due; this is the tracked population, not a global census.
+
+The existing Supabase worker calculates up to ten due ratings per run, within the same 240-operation, paced Bungie request budget and 80-second soft deadline. First-time catalog preparation takes two checkpointed invocations. A compact server-only manifest cache is checked daily. Active accounts and rating leaders target hourly ratings; recently active accounts target six hours; inactive accounts target 24 hours. Actual freshness depends on backlog and API availability.
+
+Only complete public GR-1.1 snapshots refreshed within seven days are eligible. Browser roles can read the guarded ranking view but cannot write ratings, inspect worker diagnostics, read the manifest cache or call worker queue functions. Private accounts and cross-save aliases are filtered through the existing canonical profile index. Transient errors preserve the previous verified snapshot and its original timestamp; privacy errors remove eligibility. Profile and rating workers share a three-minute crash-recovery lease, and all recurring work remains in Supabase.
 
 This system rates public Destiny 2 account achievements and experience. Every metric receives a 0–100 rating and a grade. Ten fixed weights combine into an overall rating with a ceiling of 1,000. It is an account-completeness and achievement model, not a population percentile, Elo rating, player valuation, anti-cheat verdict, or measure of a person's character.
 
@@ -75,7 +85,7 @@ Evidence factor = activity entries / (activity entries + 100)
 Performance rating = 50 + evidence factor × (raw performance − 50)
 ```
 
-The evidence factor is a versioned moderation heuristic, not a statistical confidence level. One perfect recorded activity scores approximately 50.495 instead of 100. A thousand perfect activities score approximately 95.455. Below 100 activities, the overall account rating remains provisional and receives no overall grade. At exactly 100 activities, the evidence factor is still 0.5; more history continues to moderate the raw result less strongly.
+The evidence factor is a versioned moderation heuristic, not a statistical confidence level. One perfect recorded activity scores approximately 50.495 instead of 100. A thousand perfect activities score approximately 95.455. Below 100 activities, the Crucible metric carries a small-sample evidence note. The moderation formula already accounts for that limitation, so the account can still receive an overall grade. At exactly 100 activities, the evidence factor is still 0.5; more history continues to moderate the raw result less strongly.
 
 Historical activity mixes, matchmaking, teams and game updates affect K/D and win rate. They do not support an Elo-equivalent claim. Commendations and activity volume cannot substitute for combat performance.
 
@@ -96,19 +106,19 @@ For example, an 80/100 metric with a 15% weight contributes 120 of its maximum 1
 | S | Elite | 75 | 750 |
 | S+ | Legend | 90 | 900 |
 
-Grade thresholds use unrounded scores. An overall grade requires all 100% of metric weights to be available and no positive-but-small PvP sample below 100 activities. Individual available metrics retain their own grades; their evidence notes still apply.
+Grade thresholds use unrounded scores. An overall grade requires the public inputs for all ten scoped metrics. Small PvP samples are moderated and labeled within that metric; they do not make the whole account provisional. Individual available metrics retain their own grades; their evidence notes still apply.
 
 ## Missing, private and partial data
 
 No unavailable metric is assigned a fabricated zero. Each metric has one of three states:
 
 - **Rated:** required public evidence is available; score and grade enter the complete-weight total.
-- **Partial:** known evidence gives a lower bound, such as counters from only two characters or an unlocked title whose definition cannot be resolved. The card shows “at least” the observed score and receives no grade.
+- **Partial:** known evidence gives a lower bound, such as counters from only two characters or malformed required record flags. The card shows “at least” the observed score and receives no grade.
 - **Missing:** no defensible measurement is available; the card is unrated.
 
 Coverage means **available metric weight**, not confidence, percentage of all Destiny accounts, or certainty that every historic activity is represented. Collection breadth explicitly measures visible collectibles. If only character-level collectibles are available while the profile-wide scope is absent, the metric is partial. Invisible collectibles are omitted, and an item is counted when any exposed scope shows it acquired and visible.
 
-Endgame coverage requires every surviving character's aggregate response and enough definitions to classify every nonzero/unknown completion counter. Unknown/redacted definitions and missing endgame counters make the result partial. Duplicate activity hashes within one character are counted once; the same activity on different characters remains separate. A successful empty response represents zero counters, while a failed response represents missing evidence.
+Endgame coverage requires every surviving character's aggregate response and valid counters for recognized raid/dungeon entries. GR-1.1 scopes the metric to the current recognized endgame catalog: retired, redacted, non-endgame and unclassified records are excluded rather than treated as missing endgame evidence. Failed character requests and missing counters on eligible entries still make the result partial. Duplicate activity hashes within one character are counted once; the same activity on different characters remains separate. A successful empty response represents zero counters, while a failed response represents missing evidence.
 
 For incomplete accounts:
 
@@ -156,7 +166,7 @@ If the PvP fields become unavailable, coverage falls to 80%. The remaining confi
 - Collections include cosmetics and legacy items; ownership can reflect purchases and availability as well as gameplay.
 - Commendations can reset and can be farmed; their total contribution is capped at 20/1,000 points.
 - A specialist can have an excellent metric score and a lower broad-account score. The model does not claim that a PvE-focused account is a worse PvP player, or vice versa.
-- Ratings are calculated from public data in the report. Browsers do not submit scores to trusted leaderboard storage. This release does not add a rating leaderboard or background scoring job.
+- Ratings are calculated from public data in the report. Browsers do not submit scores to trusted leaderboard storage. The Supabase cloud worker independently fetches the required Bungie inputs and stores verified snapshots. The account-rating leaderboard includes only complete public GR-1.1 scores refreshed within seven days; old versions, private accounts and genuine partial ratings are excluded.
 
 ## Sources, ownership and maintenance
 

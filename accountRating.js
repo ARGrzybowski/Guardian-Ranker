@@ -1,6 +1,6 @@
 import { numeric, statValue, recordEntries, careerGroups } from './reportData.js';
 
-export const RATING_VERSION = 'GR-1.0';
+export const RATING_VERSION = 'GR-1.1';
 // These are editorial milestones, not estimated population percentiles.
 export const RATING_METRICS = [
   { id: 'triumphs', name: 'Triumph mastery', weight: 15, unit: 'lifetime Triumph points', source: 'Public profile records', anchors: [[0, 0], [1000, 10], [10000, 30], [25000, 50], [50000, 70], [100000, 90], [150000, 100]], rationale: 'Sustained achievement across the game.', caveat: 'Lifetime totals favor established accounts and include legacy achievements.' },
@@ -46,7 +46,7 @@ export function titleEvidence(profile, definitions) {
   for (const record of recordEntries(profile)) {
     if (!record.titleUnlocked) continue;
     const def = definitions[record.hash];
-    if (!def) { unresolved++; continue; }
+    if (!def) continue; // Retired/unavailable records are outside the current title catalog.
     if (def.redacted || def.forTitleGilding) continue;
     const title = Object.values(def.titleInfo?.titlesByGender || {}).find(Boolean) || Object.values(def.titleInfo?.titlesByGenderHash || {}).find(Boolean);
     if (typeof title === 'string' && title.trim()) names.add(title.trim().toLocaleLowerCase());
@@ -78,7 +78,9 @@ export function endgameEvidence(aggregates, characters, definitions) {
     }
   }
   const available = loaded > 0 && definitions != null;
-  const partial = loaded !== characters.length || unclassified > 0 || missingCounters > 0 || !definitions;
+  // Unknown legacy/non-endgame definitions do not invalidate the recognized
+  // endgame catalog. Failed character requests and missing eligible counters do.
+  const partial = loaded !== characters.length || missingCounters > 0 || !definitions;
   return { raid: available ? raid : null, dungeon: available ? dungeon : null, partial,
     charactersLoaded: loaded, charactersTotal: characters.length, unclassified, missingCounters,
     reason: partial ? `${loaded}/${characters.length} characters loaded; ${unclassified} unclassified activity records; ${missingCounters} missing endgame counters.` : '' };
@@ -97,7 +99,7 @@ export function pvpEvidence(stats) {
   const raw = 0.65 * kdScore + 0.35 * winScore;
   const reliability = games / (games + 100);
   return { value: 50 + reliability * (raw - 50), games, kills, deaths, wins, kd, winRate, kdScore, winScore, raw, reliability,
-    lowSample: games < 100, reason: games < 100 ? 'Fewer than 100 recorded PvP activities; the result remains provisional.' : '' };
+    lowSample: games < 100, reason: games < 100 ? 'Small PvP sample; the performance score is moderated toward the baseline.' : '' };
 }
 
 function metricResult(definition, evidence) {
@@ -120,11 +122,11 @@ export function combineRatings(metrics) {
   const observedAverage = coverage ? confirmed / coverage * 100 : null;
   const lowSample = metrics.some(m => m.id === 'pvpPerformance' && m.evidence.lowSample);
   const complete = coverage === 100;
-  const provisional = !complete || lowSample;
+  const provisional = !complete;
   return { score: complete ? confirmed : coverage >= 70 ? (lower + upper) / 2 : null, observedAverage, coverage,
     complete, provisional, tier: !provisional ? ratingTier(confirmed / 10) : null,
     range: { min: Math.max(0, Math.min(1000, lower)), max: Math.max(0, Math.min(1000, upper)) },
-    reasons: [...(!complete ? ['Some metrics are missing or partial. The provisional score is the range midpoint, not a measured complete rating.'] : []), ...(lowSample ? ['Crucible performance has fewer than 100 recorded activities.'] : [])] };
+    reasons: [...(!complete ? ['Some required public metrics are missing or partial. The provisional score is the range midpoint.'] : []), ...(lowSample ? ['Crucible performance uses a moderated small-sample score.'] : [])] };
 }
 
 export function calculateAccountRating({ profile = {}, career, aggregates, characters = Object.values(profile.characters?.data || {}), recordDefinitions, activityDefinitions }) {
