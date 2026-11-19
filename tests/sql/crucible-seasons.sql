@@ -3,8 +3,8 @@ create function pg_temp.assert_season(value boolean,message text) returns void l
 begin if value is distinct from true then raise exception '%',message; end if; end;
 $$;
 
-insert into public.guardian_index(membership_id,bungie_name,membership_type,profile_status,highest_guardian_rank,last_refreshed_at)
-select (820000+i)::text,'Season Test#'||i,3,'public',11,now() from generate_series(1,30) i;
+insert into public.guardian_index(membership_id,bungie_name,membership_type,source,profile_status,highest_guardian_rank,last_refreshed_at)
+select (820000+i)::text,'Season Test#'||i,3,'seed','public',11,now() from generate_series(1,30) i;
 insert into public.guardian_performance(membership_id,credit_version,precise_points,credit_eligible,credit_rated_at,competitive_peak,commendations)
 select (820000+i)::text,'GR-3.1',i,true,now(),3000,600 from generate_series(1,30) i;
 
