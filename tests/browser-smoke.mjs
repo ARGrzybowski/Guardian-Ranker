@@ -154,7 +154,7 @@ try {
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
   let sequence = 0;
   const pending = new Map(), errors = [], apiCalls = [];
-  let historyFailure = false, aggregateFailure = false;
+  let historyFailure = false, aggregateFailure = false, milestoneFailure = false;
   function cdp(method, params = {}) {
     const id = ++sequence;
     return new Promise((resolve, reject) => {
@@ -218,11 +218,26 @@ try {
         if (page === 1 && url.includes('/Character/1/') && !historyFailure) { historyFailure = true; body = { ErrorCode: 99, Message: 'History temporarily unavailable' }; }
         else body = json({ activities: Array.from({ length: page === 0 ? 25 : page === 1 ? 1 : 0 }, (_, i) => ({ period: '2026-11-18', activityDetails: { instanceId: String(page * 25 + i + 1), referenceId: 904, mode: 4 }, values: basicStats({ completed: 1, kills: 50, deaths: 2, activityDurationSeconds: 600 }) })) });
       } else if (url.includes('/Stats/')) body = url.includes('/Character/') ? json({ raid: { allTime: basicStats({ kills: 100, deaths: 10, activitiesEntered: 20, activitiesWon: 15 }) } }) : json({ mergedAllCharacters: { results: { allPvP: { allTime: basicStats({ kills: 200, precisionKills: 80, deaths: 100, assists: 50, activitiesEntered: 100, activitiesWon: 60, secondsPlayed: 7200 }) }, allPvE: { allTime: basicStats({ kills: 1000, precisionKills: 300, deaths: 10, activitiesEntered: 50, activitiesWon: 45 }) } } } });
+      else if (url.endsWith('/Destiny2/Milestones/')) {
+        if (!milestoneFailure) {
+          milestoneFailure = true;
+          body = { ErrorCode: 99, Message: 'Milestones temporarily unavailable' };
+        } else {
+          body = json({
+            10: { milestoneHash: 10, endDate: new Date(Date.now() + 86400000).toISOString(), activities: [{ challengeObjectiveHashes: [1, 2] }, { challengeObjectiveHashes: [1] }] },
+            11: { milestoneHash: 11, endDate: '2020-01-01T17:00:00Z' }
+          });
+        }
+      } else if (url.includes('/Manifest/DestinySeasonDefinition/1/')) {
+        body = json({ displayProperties: { name: 'Monument of Triumph' }, seasonNumber: 28, startDate: '2025-12-02T17:00:00Z', endDate: '2099-01-01T17:00:00Z' });
+      } else if (url.includes('/Manifest/DestinyArtifactDefinition/2/')) body = json({ displayProperties: { name: 'Test Artifact' } });
+      else if (url.includes('/Manifest/DestinySeasonPassDefinition/3/')) body = json({ displayProperties: { name: 'Test Reward Pass' } });
       else if (/\/Manifest\/Destiny\w+Definition\/\d+\//.test(url)) body = json({ displayProperties: { name: url.includes('/901/') ? 'Test Rifle' : url.includes('/902/') ? 'Test Perk' : url.includes('/903/') ? 'Vanguard Reputation' : url.includes('/905/') ? 'Handling' : url.includes('/906/') ? 'Ally' : 'Test Raid', description: 'Public definition', icon: '/icon.png' }, inventory: { tierType: 6 }, itemTypeDisplayName: 'Scout Rifle' });
-      else if (url.includes('/Manifest/')) body = json({ jsonWorldComponentContentPaths: { en: { DestinySeasonDefinition: '/seasons.json', DestinyRecordDefinition: '/records.json', DestinyCollectibleDefinition: '/collectibles.json', DestinyMetricDefinition: '/metrics.json', DestinyProgressionDefinition: '/progressions.json', DestinyActivityDefinition: '/activities.json' } } });
-      else if (url.includes('/Settings/')) body = json({ destiny2CoreSettings: { currentSeasonHash: 1 } });
+      else if (url.includes('/Manifest/')) body = json({ jsonWorldComponentContentPaths: { en: { DestinySeasonDefinition: '/seasons.json', DestinyMilestoneDefinition: '/milestones.json', DestinyRecordDefinition: '/records.json', DestinyCollectibleDefinition: '/collectibles.json', DestinyMetricDefinition: '/metrics.json', DestinyProgressionDefinition: '/progressions.json', DestinyActivityDefinition: '/activities.json' } } });
+      else if (url.includes('/Settings/')) body = json({ destiny2CoreSettings: { currentSeasonHash: 1, currentSeasonalArtifactHash: 2, currentSeasonPassHash: 3 } });
       else throw new Error(`Unexpected API request: ${url}`);
     } else if (url.endsWith('/seasons.json')) body = { 1: { displayProperties: { name: 'Test Season' }, seasonNumber: 1 } };
+    else if (url.endsWith('/milestones.json')) body = { 10: { displayProperties: { name: '<script>Test Raid</script>' } }, 11: { displayProperties: { name: 'Expired Event' } } };
     else if (url.endsWith('/records.json')) body = recordDefinitions;
     else if (url.endsWith('/collectibles.json')) body = collectibleDefinitions;
     else if (url.endsWith('/metrics.json')) body = { 1: { displayProperties: { name: 'Raid completions' } } };
@@ -284,7 +299,7 @@ try {
   async function assertLayout(label) {
     const { width, pageOverflow, overflowing } = await evaluate(`(() => {
       const root = document.documentElement;
-      const containers = document.querySelectorAll('#results, .report-header, .report-actions, .report-filters, .report-table-wrap--responsive, .search-layout, .leaderboard-section, .board-directory, .board-table-wrap');
+      const containers = document.querySelectorAll('#results, #game-stats, .home-sidebar, .report-header, .report-actions, .report-filters, .report-table-wrap--responsive, .search-layout, .leaderboard-section, .board-directory, .board-table-wrap');
       return {
         width: window.innerWidth, pageOverflow: root.scrollWidth - root.clientWidth,
         overflowing: [...containers].filter(el => el.getClientRects().length && el.scrollWidth > el.clientWidth + 1)
@@ -302,11 +317,54 @@ try {
     }).map(header => ({ text: header.textContent, width: header.clientWidth, font: getComputedStyle(header).fontSize }))`);
     assert.deepEqual(splitHeaders, [], `${label} at ${viewportWidth}px: split leaderboard headers`);
   }
+  async function assertSidebar(sideBySide) {
+    const positions = await evaluate(`(() => {
+      const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
+      return { report: rect('#results'), stats: rect('#game-stats'), boards: rect('.home-leaderboards') };
+    })()`);
+    const { report, stats, boards } = positions;
+    if (sideBySide) {
+      assert.ok(stats.left >= report.right && Math.abs(stats.top - report.top) <= 1, 'Game stats sit to the right of the report');
+    } else {
+      assert.ok(stats.top >= report.bottom && Math.abs(stats.left - report.left) <= 1, 'Game stats sit below the report on phones');
+    }
+    assert.ok(boards.top >= stats.bottom && Math.abs(boards.left - stats.left) <= 1, 'Featured boards sit below game stats');
+  }
   await cdp('Page.navigate', { url: origin });
   await waitFor("document.querySelector('#leaderboard-body tr a') && document.getElementById('nameInput')");
   await assertLayout('Home');
   await search('Hawk#7753');
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753' && window.__writes.length === 1");
+  await assertSidebar(true);
+  await waitFor("document.querySelector('#game-season').textContent.includes('Season 28: Monument of Triumph')");
+  assert.equal(await evaluate("document.querySelectorAll('#game-stats details[open]').length"), 0);
+  assert.ok(!apiCalls.some(url => /Milestones\/|ArtifactDefinition|SeasonPassDefinition/.test(url)), 'Collapsed sections do not fetch extra data');
+  await evaluate("document.querySelector('#game-season-details summary').click()");
+  await waitFor("document.querySelector('#game-season-facts').textContent.includes('Test Reward Pass')");
+  assert.equal(await evaluate("document.querySelector('#game-season-facts time').dateTime"), '2026-06-09T17:00:00.000Z');
+  assert.match(await evaluate("document.querySelector('#game-season-facts').textContent"), /No announced end date.*Test Artifact.*Test Reward Pass.*550/s);
+  await evaluate("document.querySelector('#game-reset-details summary').click()");
+  const [weekly, daily, weekStart] = await evaluate(`['weekly-reset-timer', 'daily-reset-timer', 'current-game-week'].map(id => {
+    const date = new Date(document.querySelector('#' + id + ' time').dateTime);
+    return [date.getUTCDay(), date.getUTCHours(), date > new Date()];
+  })`);
+  assert.deepEqual(weekly, [2, 17, true]);
+  assert.deepEqual(daily.slice(1), [17, true]);
+  assert.deepEqual(weekStart, [2, 17, false]);
+  await evaluate("document.querySelector('#game-milestones-details summary').click()");
+  await waitFor("document.querySelector('#game-milestones').textContent.includes('Reopen this section to retry')");
+  await evaluate("document.querySelector('#game-milestones-details summary').click()");
+  await evaluate("document.querySelector('#game-milestones-details summary').click()");
+  await waitFor("document.querySelector('#game-milestones li')");
+  assert.match(await evaluate("document.querySelector('#game-milestones').textContent"), /<script>Test Raid<\/script>2 challenges.*Ends/);
+  assert.equal(await evaluate("document.querySelectorAll('#game-milestones li').length"), 1);
+  assert.equal(await evaluate("document.querySelectorAll('#game-milestones script').length"), 0);
+  await assertLayout('Expanded game stats');
+  await assertSidebar(true);
+  await mkdir(join(root, 'test-artifacts'), { recursive: true });
+  const expandedSidebar = await cdp('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(root, 'test-artifacts', 'global-sidebar.png'), Buffer.from(expandedSidebar.data, 'base64'));
+  await evaluate("document.querySelectorAll('#game-stats details[open] summary').forEach(summary => summary.click())");
   assert.deepEqual(await evaluate('window.__writes[0]'), { name: 'enqueue_guardian', args: { p_membership_id: 'hawk', p_membership_type: 1 } });
   assert.match(await evaluate("document.getElementById('index-status').textContent"), /8 indexed Guardians; 2 waiting/);
   assert.match(await evaluate("document.getElementById('index-status').textContent"), /7 updated in 24 hours; 3 due/);
@@ -474,6 +532,7 @@ try {
   await resize(390, 844, true);
   await evaluate("document.querySelector('#suggestions').classList.remove('show')");
   await openSection('overview', "document.querySelector('.eververse-value')?.textContent === '300 Bright Dust'");
+  await assertSidebar(false);
   await evaluate('window.scrollTo(0, 0)');
   assert.ok(await evaluate(`Math.abs(document.querySelector('#nameInput').getBoundingClientRect().top -
     document.querySelector('#searchBtn').getBoundingClientRect().top) <= 1`), 'The search button stays beside the field on phones');
@@ -482,6 +541,14 @@ try {
   await mkdir(artifactDir, { recursive: true });
   const mobile = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'mobile.png'), Buffer.from(mobile.data, 'base64'));
+  await evaluate("document.querySelector('#game-season-details summary').click()");
+  await waitFor("document.querySelector('#game-season-facts').textContent.includes('Test Artifact')");
+  await assertLayout('Expanded game stats on mobile');
+  await assertSidebar(false);
+  await evaluate("document.querySelector('#game-stats').scrollIntoView({block:'start'})");
+  const mobileSidebar = await cdp('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(artifactDir, 'global-sidebar-mobile.png'), Buffer.from(mobileSidebar.data, 'base64'));
+  await evaluate("document.querySelector('#game-season-details summary').click()");
   await waitFor("document.querySelector('.eververse-value')?.textContent === '300 Bright Dust'");
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click(); document.querySelector('.eververse-items summary').click()");
   await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 2 && document.querySelector('.eververse-items .report-cell-label').getClientRects().length");
@@ -508,8 +575,13 @@ try {
   await waitFor("document.querySelector('.comparison-ratings')?.textContent.includes('Partial#1234') && document.querySelector('.comparison-status').textContent === 'Comparison ready.'");
   assert.equal(await evaluate("document.querySelector('.comparison-ratings tbody tr td:last-child .report-cell-value').textContent"), '—', 'A provisional score cannot determine an overall lead');
   await assertLayout('Shared comparison with a long player name');
+  await assertSidebar(false);
   await resize(768, 1024);
   await assertLayout('Tablet comparison');
+  await assertSidebar(false);
+  await resize(1000, 880);
+  await assertLayout('Narrow desktop comparison');
+  await assertSidebar(true);
   await resize(1440, 1000);
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html` });
   await waitFor("document.querySelectorAll('#board-rows tr').length === 25");

@@ -23,7 +23,7 @@ export function createManifestClient(request = bungieRequest, fetcher = fetch) {
       return Response;
     },
     async table(type, signal) {
-      if (!['DestinyRecordDefinition', 'DestinyCollectibleDefinition', 'DestinyMetricDefinition', 'DestinyProgressionDefinition', 'DestinyActivityDefinition', 'DestinySeasonDefinition'].includes(type)) throw new Error('Unsupported catalogue.');
+      if (!['DestinyRecordDefinition', 'DestinyCollectibleDefinition', 'DestinyMetricDefinition', 'DestinyProgressionDefinition', 'DestinyActivityDefinition', 'DestinySeasonDefinition', 'DestinyMilestoneDefinition'].includes(type)) throw new Error('Unsupported catalogue.');
       if (tables.has(type)) return tables.get(type);
       manifest ??= (await request('/Destiny2/Manifest/', { signal })).Response;
       const path = manifest?.jsonWorldComponentContentPaths?.en?.[type];
