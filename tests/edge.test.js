@@ -25,3 +25,16 @@ test('authenticated cloud runs use bounded batches and ignore caller-supplied sc
   assert.equal(options.maxClanPages, 3);
   assert.equal('triumph_score' in options, false);
 });
+
+test('a signed score wake receives a smaller Bungie budget and handles requested ratings only', async () => {
+  let options, budget;
+  const handler = createEdgeHandler({ url: 'https://example.test', key: 'test',
+    storeFactory: () => ({ select: async () => [{ invocation_token: token }] }),
+    bungieFactory: value => { budget = value.maxOperations; return {}; },
+    index: async value => { options = value; return { status: 'completed' }; } });
+  const response = await handler(new Request('https://example.test', { method: 'POST', headers: { 'x-guardian-worker-token': token }, body: '{"mode":"score_refresh"}' }));
+  assert.equal(response.status, 200);
+  assert.equal(options.scoresOnly, true);
+  assert.equal(options.maxRatings, 2);
+  assert.equal(budget, 48);
+});

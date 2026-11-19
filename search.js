@@ -100,13 +100,13 @@ function renderProfile(user, loaded, version) {
   url.searchParams.set('name', bungieName);
   history.replaceState(null, '', url);
   const saveStatus = renderPlayerReport(results, {
-    user, loaded, bungieName, signal: activeController.signal
+    user, loaded, bungieName, signal: activeController.signal, onScoreRefreshed: loadLeaderboards
   });
   document.title = `${bungieName} · Guardian Ranker`;
   void (async () => {
     try {
       await queueGuardian(membershipId, membershipType);
-      if (version === searchVersion) saveStatus.textContent = 'Account tracked. Leaderboard scores update during scheduled cloud refreshes.';
+      if (version === searchVersion) saveStatus.textContent = 'Account tracked. To request a fresh leaderboard score, open Account rating and select Update score.';
     } catch (error) {
       if (version !== searchVersion) return;
       saveStatus.textContent = error.code === 'PGRST202'

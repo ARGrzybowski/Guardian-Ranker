@@ -41,10 +41,22 @@ const eververseCatalog = { schemaVersion: 1, manifestVersion: 'test', catalogDat
 const databaseScript = `
 window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
 window.__standingRetry = true;
+window.__ratingRefreshReads = 0;
 window.__boardCalls = [];
 window.__performanceRows = ${JSON.stringify({ hawk: performanceRow(1, 82), rival: performanceRow(2, 94), retry: performanceRow(1, 82), partial: { ...performanceRow(0, null), points: null, eligible: false, standing: null } })};
 window.supabase = { createClient: () => ({
   rpc: (name, args) => {
+    if (name === 'request_guardian_score') {
+      window.__writes.push({ name, args });
+      return { abortSignal: async () => ({ data: { membershipId: args.p_membership_id, requestedAt: '2026-11-19T22:00:00Z', state: 'queued' }, error: null }) };
+    }
+    if (name === 'get_guardian_score_request') {
+      return { abortSignal: async () => {
+        window.__performanceRows[args.p_membership_id].points = 315;
+        window.__rows[0].points = 315;
+        return { data: 'updated', error: null };
+      } };
+    }
     if (name === 'get_guardian_specialty_board') {
       window.__boardCalls.push(args);
       const raw = ${JSON.stringify(specialtyRows)};
@@ -75,7 +87,10 @@ window.supabase = { createClient: () => ({
         return { data: sample, error };
       },
       single: async () => ({ data: { indexed_count: 8, tracked_count: 10, fresh_24h_count: 7, due_count: 3, rating_indexed_count: 8, rating_due_count: 2, last_refreshed_at: '2026-11-18T12:00:00Z' }, error }),
-      range: async (start, end) => ({ data: (table === 'guardian_specialty_catalog' ? ${JSON.stringify(specialtyCatalog)} : window.__rows).slice(start, end + 1), error }) };
+      range: async (start, end) => {
+        if (table === 'guardian_activity_rankings' && window.__rows[0]?.points === 315) window.__ratingRefreshReads++;
+        return { data: (table === 'guardian_specialty_catalog' ? ${JSON.stringify(specialtyCatalog)} : window.__rows).slice(start, end + 1), error };
+      } };
     return query;
   }
 }) }) };`;
@@ -387,14 +402,19 @@ try {
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Retry#1234'");
   await openSection('rating', "document.querySelector('.rating-tier')?.textContent.includes('temporarily unavailable')");
   assert.ok(await evaluate("document.querySelector('.rating-dimensions').textContent.includes('Knowledge')"));
+  assert.ok(await evaluate("window.__writes.every(request => request.name === 'enqueue_guardian')"), 'Ordinary searches do not manually refresh scores');
+  assert.equal(await evaluate("document.querySelector('.rating-refresh').textContent"), 'Update score');
   await evaluate("window.__standingRetry=false; document.querySelector('.rating-refresh').click()");
-  await waitFor("document.querySelector('.rating-tier')?.textContent.includes('82%')");
+  await waitFor("document.querySelector('.rating-refresh-status')?.textContent.includes('Score and leaderboards updated') && window.__ratingRefreshReads > 0");
+  assert.equal(await evaluate("document.querySelector('.overall-rating-score').textContent"), '315 points');
+  assert.deepEqual(await evaluate("window.__writes.find(request => request.name === 'request_guardian_score')"),
+    { name: 'request_guardian_score', args: { p_membership_id: 'retry', p_membership_type: 1 } });
   await search('<img src=x onerror=window.__injected=true>#1234');
   await waitFor("document.querySelector('#results .bungie-name')?.textContent.includes('<img')");
   assert.equal(await evaluate('Boolean(window.__injected)'), false, 'Display names cannot inject HTML');
   await evaluate('window.__dbFail = true');
   await search('Offline#1234');
-  await waitFor("document.querySelector('#results [role=status]')?.textContent.includes('could not be queued')");
+  await waitFor("document.querySelector('#results .queue-status')?.textContent.includes('could not be queued')");
   assert.equal(await evaluate("document.querySelector('#results .bungie-name').textContent"), 'Offline#1234');
   await search('PrivateCollections#1234');
   await waitFor("document.querySelector('.eververse-details')?.textContent.includes('did not return public Collections data')");

@@ -69,7 +69,7 @@ export function createBungieWorker({ apiKey, maxOperations = 300, signal, interv
 }
 
 // Runs once per invocation. Scheduling lives in the cloud, never on a PC.
-export async function runIndexer({ store, bungie, signal, now = () => new Date(), seedNames = [], seedClans = [], maxProfiles = 100, maxDiscoveries = 25, maxClanPages = 20, profileConcurrency = 1, maxActivityScans = 0, maxRatings = 0, rateProfiles }) {
+export async function runIndexer({ store, bungie, signal, now = () => new Date(), seedNames = [], seedClans = [], maxProfiles = 100, maxDiscoveries = 25, maxClanPages = 20, profileConcurrency = 1, maxActivityScans = 0, maxRatings = 0, rateProfiles, scoresOnly = false }) {
   const summary = { profiles_attempted: 0, profiles_refreshed: 0, cached_identity_hits: 0, seed_errors: 0, profile_errors: 0, discovery_errors: 0, roster_errors: 0, clans_found: 0, roster_members_seen: 0, roster_pages: 0, activity_scans: 0, activity_errors: 0, activity_members_seen: 0 };
   const runId = await store.start();
   if (!runId) return { status: 'already_running' };
@@ -132,7 +132,7 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
   try {
     if (maxRatings && rateProfiles) {
       try {
-        Object.assign(summary, await rateProfiles({ store, bungie, signal, now, limit: maxRatings }));
+        Object.assign(summary, await rateProfiles({ store, bungie, signal, now, limit: maxRatings, requestsOnly: scoresOnly }));
         if (summary.rating_manifest_prepared) return { status, ...summary };
         // Preserve time for discovery instead of spending the entire remaining
         // window on the first profile tranche during rating backfills.
@@ -142,6 +142,10 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
         if (error instanceof BudgetReached || error.databaseFailure || signal?.aborted) throw error;
         summary.rating_errors = (summary.rating_errors || 0) + 1;
       }
+    }
+    if (scoresOnly) {
+      if (summary.rating_errors || summary.ratings_partial) status = 'partial';
+      return { status, ...summary, bungie_operations: bungie.operations };
     }
     for (const name of seedNames) {
       try {
