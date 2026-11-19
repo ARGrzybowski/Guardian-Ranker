@@ -6,6 +6,7 @@ import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchW
 import { drawPerformanceRating, loadGuardianStandings } from './performanceView.js';
 import { renderPlayerComparison } from './comparisonView.js';
 import { eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js';
+import { refreshGuardianScore } from './indexQueue.js';
 
 const number = (value, digits = 0) => numeric(value) == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const tile = (label, value) => `<div class="report-stat"><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`;
@@ -22,14 +23,17 @@ function download(data, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function renderPlayerReport(container, { user, loaded, bungieName, signal }) {
+export function renderPlayerReport(container, { user, loaded, bungieName, signal, onScoreRefreshed }) {
   const { membership, profileData } = loaded;
   const profile = profileData.Response;
   const characters = characterSummary(profile);
   const summary = overviewStats(profile);
   const api = createReportApi(membership), manifest = createManifestClient();
+  let ratingMembershipId = membership.membershipId;
   let standingsRequest;
-  const loadRating = () => standingsRequest ??= loadGuardianStandings(membership.membershipId, signal);
+  let refreshing = false;
+  let refreshMessage = '';
+  const loadRating = () => standingsRequest ??= loadGuardianStandings(ratingMembershipId, signal);
   const generatedAt = new Date().toISOString();
   const exported = { schemaVersion: 1, bungieName, membership, generatedAt, profile: profileData, sections: {} };
   const sections = { overview: 'Overview', rating: 'Account rating', characters: 'Characters & gear', career: 'PvP & PvE', activities: 'Activity history', endgame: 'Activity records', records: 'Triumphs & titles', collections: 'Collections', progression: 'Progression & metrics', compare: 'Compare players' };
@@ -90,20 +94,59 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   const loaders = { rating: async () => {
     const standing = await loadRating();
     signal.throwIfAborted();
+    displayRating(standing);
+  }, characters: loadCharacters, career: loadCareer, activities: loadActivities, endgame: () => renderActivityRecords(panel('endgame'), { api, characters, manifest, signal, onExport: data => { exported.sections.activityRecords = data; } }), records: () => loadCatalogue('records'), collections: () => loadCatalogue('collections'), progression: loadProgression, compare: loadComparison };
+
+  function displayRating(standing) {
     drawPerformanceRating(panel('rating'), { standing, summary, onCompare: () => {
       container.querySelector('.report-nav [data-section=compare]').click();
       panel('compare').querySelector('input')?.focus();
-    }, onRefresh: event => {
-      event.currentTarget.disabled = true;
-      standingsRequest = null;
-      void withState(panel('rating'), loaders.rating);
-    } });
+    }, onRefresh: requestScoreRefresh, refreshMessage, refreshing });
     exported.sections.accountRating = standing;
     const row = standing.performance;
     if (row?.points != null) {
       ratingPreview.querySelector('.rating-preview-value').textContent = `${number(row.points, 2)} performance points${row.percentile == null ? '' : ` · ${number(row.percentile, 2)} percentile`}`;
     }
-  }, characters: loadCharacters, career: loadCareer, activities: loadActivities, endgame: () => renderActivityRecords(panel('endgame'), { api, characters, manifest, signal, onExport: data => { exported.sections.activityRecords = data; } }), records: () => loadCatalogue('records'), collections: () => loadCatalogue('collections'), progression: loadProgression, compare: loadComparison };
+  }
+
+  async function requestScoreRefresh(event) {
+    if (refreshing) return;
+    refreshing = true;
+    const button = event.currentTarget;
+    const restoreFocus = document.activeElement === button;
+    button.disabled = true;
+    const setMessage = message => {
+      if (signal.aborted) return;
+      refreshMessage = message;
+      panel('rating').querySelector('.rating-refresh-status').textContent = message;
+    };
+    setMessage('Requesting a fresh score…');
+    try {
+      const result = await refreshGuardianScore(membership, signal, state => setMessage(state === 'indexing'
+        ? 'The cloud worker is still indexing this season’s matches.' : 'Score refresh queued. This report will update when it is ready.'));
+      signal.throwIfAborted();
+      if (result.state === 'updated') {
+        ratingMembershipId = result.membershipId;
+        standingsRequest = null;
+        const standing = await loadRating();
+        if (signal.aborted) return;
+        refreshMessage = standing.performanceUnavailable ? 'Score saved. The report could not reload yet.'
+          : standing.performance?.eligible === false ? 'Score updated. This account is still below the leaderboard entry requirements.'
+          : 'Score and leaderboards updated.';
+        refreshing = false;
+        displayRating(standing);
+        if (restoreFocus && !panel('rating').hidden && document.activeElement === document.body) panel('rating').querySelector('.rating-refresh').focus();
+        void onScoreRefreshed?.();
+      } else setMessage(result.state === 'pending' ? 'The request is still queued in the cloud. You can return to this report later.'
+        : 'A verified score could not be calculated from the available public Bungie data.');
+    } catch (error) {
+      if (!signal.aborted) setMessage(error.code === 'PGRST202' ? 'Manual score updates are temporarily unavailable.'
+        : 'Could not check the score refresh. Try again shortly.');
+    } finally {
+      refreshing = false;
+      button.disabled = false;
+    }
+  }
   container.querySelectorAll('[data-section]').forEach(button => button.addEventListener('click', () => {
     const id = button.dataset.section;
     const sectionUrl = new URL(window.location.href);

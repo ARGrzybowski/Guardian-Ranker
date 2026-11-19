@@ -1,7 +1,7 @@
 export const API_KEY = '12ecbda2bf10444b8b8058f825f33a43';
 const PLATFORM_URL = 'https://www.bungie.net/Platform';
 
-function delay(ms, signal) {
+export function delay(ms, signal) {
   return new Promise((resolve, reject) => {
     signal?.throwIfAborted();
     const abort = () => { clearTimeout(timer); reject(signal.reason); };

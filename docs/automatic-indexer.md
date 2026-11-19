@@ -10,6 +10,8 @@ Apply `supabase/crucible-seasons.sql` after `supabase/specialty-leaderboards.sql
 
 Apply `supabase/indexer-disk-io.sql` after `supabase/crucible-seasons.sql` to limit repeat writes and database-wide coverage scans. Existing cloud projects can change the scheduled job with `cron.alter_job` using `*/5 * * * *`.
 
+Apply `supabase/manual-score-refresh.sql` before deploying the worker that supports **Update score**. The button submits a membership ID and type. An idle cloud worker can pick up the request immediately, and the scheduled worker handles work that is still queued. The verified score and specialty standings publish through the existing snapshot writes. The normal indexer reserves capacity for scheduled scores even when manual requests are waiting.
+
 The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
 
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase
@@ -38,7 +40,7 @@ Each run refreshes older due accounts first, discovers their clans, imports rost
 pages, then uses any remaining profile budget on newly discovered members.
 Rosters checkpoint after every page. Duplicate discoveries do not reset due times.
 The next run resumes unfinished work, including after operation limits or failures.
-Searches can request a priority refresh, with a five-minute per-account cooldown.
+Searches can request a priority profile refresh, with a five-minute per-account cooldown. Score requests start from **Update score** on the player report.
 The status panel reports profiles refreshed in the last day and the due backlog,
 so a recent update to one player does not imply the entire dataset is fresh.
 Coverage counts refresh at most every 30 minutes. The worker records each run's

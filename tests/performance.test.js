@@ -203,3 +203,22 @@ test('cloud performance reuses the shared activity catalog and saves exact publi
   assert.equal(saved[0][2], 'monument');
   assert.ok(paths.some(path => path.includes('count=100&mode=5')));
 });
+
+test('manual requests publish a trusted profile and score before announcing completion', async () => {
+  const f = fixture(), writes = [];
+  f.profile.profile = { data: { userInfo: { bungieGlobalDisplayName: 'Manual', bungieGlobalDisplayNameCode: 1234 } } };
+  const row = { membership_id: '123', membership_type: 3, requested_at: now.toISOString() };
+  const store = {
+    duePerformance: async (_, limit, only) => { assert.equal(limit, 2); assert.equal(only, true); return [row]; },
+    performanceCatalog: async () => ({ checked_at: now.toISOString(), projection: PERFORMANCE_CATALOG_PROJECTION, activities: f.activityDefinitions, seasons: f.crucible.seasons }),
+    crucibleProgress: async () => undefined,
+    saveCrucibleProgress: async () => [],
+    save: async (_, snapshot) => writes.push(['profile', snapshot.bungie_name]),
+    savePerformance: async (_, rating) => writes.push(['score', rating.eligible]),
+    saveScoreRequest: async (request, state) => { assert.equal(request.requested_at, row.requested_at); writes.push(['status', state]); }
+  };
+  const bungie = { request: async path => ({ Response: path.includes('/Profile/') ? f.profile : path.includes('AggregateActivityStats')
+    ? f.aggregates[0] : path.includes('/Activities/') ? { activities: [] } : f.career }) };
+  await createPerformanceRunner()({ store, bungie, now: () => now, limit: 2, requestsOnly: true });
+  assert.deepEqual(writes, [['profile', 'Manual#1234'], ['score', true], ['status', 'updated']]);
+});

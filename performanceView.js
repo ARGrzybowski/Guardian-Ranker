@@ -80,7 +80,7 @@ function metricBreakdown(metric) {
   return '';
 }
 
-export function drawPerformanceRating(target, { standing, summary, onCompare, onRefresh }) {
+export function drawPerformanceRating(target, { standing, summary, onCompare, onRefresh, refreshMessage = '', refreshing = false }) {
   const row = standing.performance;
   const previousModel = row && row.rating_version !== PERFORMANCE_VERSION;
   const metrics = (row?.metrics || []).map(metric => metric.id === 'recentKd'
@@ -95,7 +95,8 @@ export function drawPerformanceRating(target, { standing, summary, onCompare, on
   target.innerHTML = `<p class="eyebrow">GUARDIAN PERFORMANCE · ${e(standing.version)}</p><h3>Performance rating</h3>
     ${previousModel ? note('Showing the prior scoring model while the revised standings collect 30 verified eligible accounts.') : ''}
     <div class="report-actions"><button class="rating-compare" type="button">Compare with another Guardian</button>
-    <button class="rating-refresh" type="button">Refresh standings</button></div>
+    <button class="rating-refresh" type="button" ${refreshing ? 'disabled' : ''}>Update score</button></div>
+    <p class="rating-refresh-status report-note" role="status">${e(refreshMessage)}</p>
     <div class="rating-hero"><div><p class="rating-label">Overall performance</p><div class="overall-rating-score">${e(result)}</div>
       <p class="rating-tier">${e(status)}</p></div>
       <div class="rating-coverage">${row?.standing != null ? note(standingText(row)) : ''}

@@ -72,8 +72,13 @@ export class IndexStore {
   failRating(row, nextRating, isPrivate) {
     return this.rpc('fail_guardian_rating', { p_id: row.membership_id, p_next: nextRating, p_private: isPrivate });
   }
-  duePerformance(now, limit) {
-    return this.rpc('get_guardian_season_due', { p_now: now, p_limit: limit });
+  duePerformance(now, limit, requestsOnly = false) {
+    return this.rpc('get_guardian_score_work', { p_now: now, p_limit: limit, p_requests_only: requestsOnly });
+  }
+  saveScoreRequest(row, state, nextAttempt, failures = 0) {
+    const filter = new URLSearchParams({ membership_id: `eq.${row.membership_id}`, requested_at: `eq.${row.requested_at}` });
+    return this.request(`guardian_score_requests?${filter}`, { method: 'PATCH', prefer: 'return=minimal',
+      body: { state, next_attempt_at: nextAttempt, failures } });
   }
   async performanceCatalog() {
     return (await this.select('guardian_performance_catalog', { select: 'payload', singleton: 'eq.true' }))[0]?.payload;
