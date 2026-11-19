@@ -13,7 +13,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const fixtureRows = Array.from({ length: 8 }, (_, i) => ({
   membership_id: String(i), bungie_name: i === 7 ? 'Hawk#7753' : `Player${i}#1234`,
   triumph_score: 1000 - i, guardian_rank: 11 - i, time_played_hours: 200 - i,
-  class_type: 'Titan', light_level: 400 - i
+  class_type: 'Titan', light_level: 400 - i, account_rating: 900-i, rating_grade: 'S', rating_version: 'GR-1.1'
 }));
 const basicStats = values => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { basic: { value } }]));
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
@@ -30,7 +30,7 @@ window.supabase = { createClient: () => ({
   select: () => {
     const error = window.__indexMissing && table.startsWith('guardian_') ? { code: 'PGRST205' } : null;
     const query = { order: () => query,
-      single: async () => ({ data: { indexed_count: 8, tracked_count: 10, fresh_24h_count: 7, due_count: 3, last_refreshed_at: '2026-11-18T12:00:00Z' }, error }),
+      single: async () => ({ data: { indexed_count: 8, tracked_count: 10, fresh_24h_count: 7, due_count: 3, rating_indexed_count: 8, rating_due_count: 2, last_refreshed_at: '2026-11-18T12:00:00Z' }, error }),
       range: async (start, end) => ({ data: window.__rows.slice(start, end + 1), error }) };
     return query;
   }
@@ -263,7 +263,7 @@ try {
   assert.ok(!(await evaluate('window.__lastDownloadText')).includes('Test Raid'));
   await openSection('rating', "document.querySelectorAll('.rating-metric').length === 10");
   assert.ok(await evaluate("document.querySelector('.rating-coverage').textContent.includes('100%')"));
-  assert.ok(await evaluate("document.querySelector('#report-rating').textContent.includes('GR-1.0')"));
+  assert.ok(await evaluate("document.querySelector('#report-rating').textContent.includes('GR-1.1')"));
   assert.equal(await evaluate('window.location.hash'), '#rating');
   assert.equal(await evaluate("document.querySelectorAll('.rating-metric meter').length"), 10);
   assert.ok(await evaluate("document.querySelector('.rating-methodology').textContent.includes('Weights total 100%')"));
@@ -299,7 +299,7 @@ try {
   assert.equal(exported.sections.activityRecords.rows.length, 6);
   assert.equal(exported.sections.activityRecords.coverage.charactersLoaded, 3);
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
-  assert.equal(exported.sections.accountRating.version, 'GR-1.0');
+  assert.equal(exported.sections.accountRating.version, 'GR-1.1');
   assert.equal(exported.sections.accountRating.overall.coverage, 100);
   assert.equal(exported.sections.accountRating.overall.provisional, false);
   await evaluate("document.querySelector('[data-section=overview]').click()");
@@ -368,11 +368,15 @@ try {
   await cdp('Emulation.clearDeviceMetricsOverride');
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html` });
   await waitFor("document.querySelectorAll('#highest-character-body tr a').length === 5");
+  await waitFor("document.querySelectorAll('#account-rating-body tr a').length === 5");
+  assert.ok(await evaluate("document.querySelector('#account-rating-body a').href.endsWith('#rating')"));
+  await evaluate("document.querySelector('#toggleAccountRatingBtn').click()");
+  assert.equal(await evaluate("document.querySelectorAll('#account-rating-body tr a').length"),8);
   await evaluate("document.getElementById('toggleHighestCharacterBtn').click(); document.getElementById('toggleTimePlayedBtn').click()");
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 8);
   assert.equal(await evaluate("document.querySelectorAll('#time-played-body tr a').length"), 8);
   await evaluate("document.getElementById('leaderboardSearch').value='Hawk#7753'; document.getElementById('leaderboardSearchBtn').click()");
-  assert.equal(await evaluate("document.querySelectorAll('tr.highlight').length"), 4);
+  assert.equal(await evaluate("document.querySelectorAll('tr.highlight').length"), 5);
   await evaluate("document.getElementById('toggleHighestCharacterBtn').click()");
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
   const desktop = await cdp('Page.captureScreenshot', { format: 'png' });

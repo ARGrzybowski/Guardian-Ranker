@@ -1,4 +1,5 @@
 import { getDatabase } from './database.js';
+import { RATING_VERSION } from './accountRating.js';
 
 export function formatPlaytime(value) {
   if (value == null) return 'Unavailable';
@@ -8,6 +9,7 @@ export function formatPlaytime(value) {
 }
 
 const boards = {
+  rating: { source: 'guardian_rating_rankings', score: 'account_rating', fields: ['account_rating','rating_grade'], body: 'account-rating-body', button: 'toggleAccountRatingBtn' },
   triumph: { table: 'leaderboard', score: 'triumph_score', fields: ['triumph_score'], body: 'leaderboard-body', button: 'toggleLeaderboardBtn' },
   guardian: { table: 'leaderboard', score: 'guardian_rank', fields: ['guardian_rank'], body: 'guardian-rank-body', button: 'toggleGuardianRankBtn' },
   power: { table: 'highest_character', score: 'light_level', fields: ['class_type', 'light_level'], body: 'highest-character-body', button: 'toggleHighestCharacterBtn' },
@@ -28,7 +30,7 @@ function renderBoard(board, errorMessage) {
     tr.appendChild(rank);
     const nameCell = document.createElement('td');
     const link = document.createElement('a');
-    link.href = `index.html?name=${encodeURIComponent(row.bungie_name)}`;
+    link.href = `index.html?name=${encodeURIComponent(row.bungie_name)}${board.source ? '#rating' : ''}`;
     link.textContent = row.bungie_name;
     link.style.color = 'inherit';
     link.style.textDecoration = 'none';
@@ -36,7 +38,7 @@ function renderBoard(board, errorMessage) {
     tr.appendChild(nameCell);
     for (const field of board.fields) {
       const td = document.createElement('td');
-      td.textContent = field === 'time_played_hours' ? formatPlaytime(row[field]) : row[field] ?? 'Unavailable';
+      td.textContent = field === 'account_rating' ? row[field] == null ? 'Unavailable' : `${(Math.floor(Number(row[field])*10)/10).toLocaleString()} / 1,000` : field === 'time_played_hours' ? formatPlaytime(row[field]) : row[field] ?? 'Unavailable';
       tr.appendChild(td);
     }
     tbody.appendChild(tr);
@@ -45,7 +47,7 @@ function renderBoard(board, errorMessage) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = board.fields.length + 2;
-    td.textContent = errorMessage || 'No players saved yet.';
+    td.textContent = errorMessage || (board.source ? 'Cloud account ratings are being populated. Check back shortly.' : 'No players saved yet.');
     tr.appendChild(td);
     tbody.appendChild(tr);
   }
@@ -62,12 +64,12 @@ async function loadBoard(board) {
   const version = ++board.version;
   try {
     const rows = [];
-    let table = 'guardian_rankings';
+    let table = board.source || 'guardian_rankings';
     // Supabase caps a single response. Read all pages in a stable order.
     const pageSize = 1000;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await getDatabase().from(table)
-        .select(['membership_id', 'bungie_name', ...board.fields, ...(table === 'guardian_rankings' ? ['last_refreshed_at'] : [])].join(','))
+        .select(['membership_id', 'bungie_name', ...board.fields, ...(table.startsWith('guardian_') ? ['last_refreshed_at'] : [])].join(','))
         .order(board.score, { ascending: false, nullsFirst: false })
         .order('membership_id', { ascending: true })
         .range(offset, offset + pageSize - 1);
@@ -93,6 +95,7 @@ async function loadBoard(board) {
 }
 
 export const loadLeaderboard = () => loadBoard(boards.triumph);
+export const loadAccountRatingLeaderboard = () => loadBoard(boards.rating);
 export const loadGuardianRankLeaderboard = () => loadBoard(boards.guardian);
 export const loadPowerLeaderboard = () => loadBoard(boards.power);
 export const loadTimePlayedLeaderboard = () => loadBoard(boards.time);
@@ -112,6 +115,8 @@ export async function loadIndexStatus() {
     const updated = data.last_refreshed_at ? ` Latest profile refresh: ${new Date(data.last_refreshed_at).toLocaleString()}.` : ' Waiting for the first cloud refresh.';
     const freshness = data.fresh_24h_count == null ? '' : ` ${Number(data.fresh_24h_count).toLocaleString()} updated in 24 hours; ${Number(data.due_count).toLocaleString()} due for refresh.`;
     element.textContent = `${count.toLocaleString()} indexed Guardians; ${queued.toLocaleString()} waiting for a public profile.${freshness} Rankings cover tracked accounts.${updated}`;
+    const ratingStatus = document.getElementById('rating-index-status');
+    if (ratingStatus) ratingStatus.textContent = `${Number(data.rating_indexed_count || 0).toLocaleString()} cloud-verified ${RATING_VERSION} ratings; ${Number(data.rating_due_count || 0).toLocaleString()} awaiting calculation or refresh. Complete public ratings only. ${data.rating_last_updated_at ? `Latest rating: ${new Date(data.rating_last_updated_at).toLocaleString()}.` : 'Initial backfill is running.'}`;
   } catch {
     element.textContent = 'Leaderboard coverage is temporarily unavailable.';
   }

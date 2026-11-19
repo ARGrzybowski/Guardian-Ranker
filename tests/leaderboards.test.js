@@ -8,8 +8,8 @@ class Element extends EventTarget {
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, handler) { this.listeners.set(name, (this.listeners.get(name) || 0) + 1); super.addEventListener(name, handler); }
 }
-const ids = ['leaderboard-body', 'guardian-rank-body', 'highest-character-body', 'time-played-body',
-  'toggleLeaderboardBtn', 'toggleGuardianRankBtn', 'toggleHighestCharacterBtn', 'toggleTimePlayedBtn'];
+const ids = ['leaderboard-body', 'guardian-rank-body', 'highest-character-body', 'time-played-body','account-rating-body',
+  'toggleLeaderboardBtn', 'toggleGuardianRankBtn', 'toggleHighestCharacterBtn', 'toggleTimePlayedBtn','toggleAccountRatingBtn'];
 const elements = Object.fromEntries(ids.map(id => [id, new Element()]));
 globalThis.document = Object.assign(new EventTarget(), {
   getElementById: id => elements[id], createElement: () => new Element()
@@ -58,6 +58,15 @@ test('power reads the verified ranking view with correct column names', async ()
   assert.equal(reads.at(-1).table, 'guardian_rankings');
   assert.match(reads.at(-1).fields, /class_type,light_level,last_refreshed_at/);
   assert.equal(reads.at(-1).orders[0].field, 'light_level');
+});
+test('account rating reads cloud-verified scores and links to the rating report', async () => {
+  rows = [{ membership_id:'1',bungie_name:'Hawk#7753',account_rating:917.96856,rating_grade:'S+' }];
+  await boards.loadAccountRatingLeaderboard();
+  assert.equal(reads.at(-1).table,'guardian_rating_rankings');
+  assert.equal(reads.at(-1).orders[0].field,'account_rating');
+  const row=elements['account-rating-body'].children[0];
+  assert.equal(row.children[2].textContent,'917.9 / 1,000');
+  assert.match(row.children[1].children[0].href,/#rating$/);
 });
 
 test('each leaderboard toggle receives exactly one rendering handler', () => {

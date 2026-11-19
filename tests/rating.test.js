@@ -19,7 +19,7 @@ function fixture() {
   };
 }
 test('rating policy is versioned, ten metrics have weights totaling 100%', () => {
-  assert.equal(RATING_VERSION, 'GR-1.0'); assert.equal(RATING_METRICS.length, 10);
+  assert.equal(RATING_VERSION, 'GR-1.1'); assert.equal(RATING_METRICS.length, 10);
   assert.equal(RATING_METRICS.reduce((sum, m) => sum + m.weight, 0), 100);
   assert.equal(new Set(RATING_METRICS.map(m => m.id)).size, 10);
   assert.throws(() => combineRatings([{ weight: 50 }]), /100%/);
@@ -46,13 +46,13 @@ test('full rating matches the weighted formula and tier thresholds use unrounded
   assert.equal(r.overall.range.min, expected); assert.equal(r.overall.range.max, expected);
   assert.equal(ratingTier(89.999).grade, 'S'); assert.equal(ratingTier(90).grade, 'S+'); assert.equal(ratingTier(null), null);
 });
-test('small PvP samples moderate performance and prevent an established overall grade', () => {
+test('small PvP samples moderate the metric without withholding the account grade', () => {
   const small = pvpEvidence(stats({ kills: 30, deaths: 1, activitiesEntered: 1, activitiesWon: 1 }));
   const large = pvpEvidence(stats({ kills: 30000, deaths: 1000, activitiesEntered: 1000, activitiesWon: 1000 }));
   assert.ok(small.value > 50 && small.value < 51); assert.ok(large.value > 90);
   const f = fixture(); f.career.mergedAllCharacters.results.allPvP.allTime = stats({ kills: 10, deaths: 2, activitiesEntered: 5, activitiesWon: 4 });
   const r = calculateAccountRating(f);
-  assert.equal(r.overall.coverage, 100); assert.equal(r.overall.provisional, true); assert.equal(r.overall.tier, null);
+  assert.equal(r.overall.coverage, 100); assert.equal(r.overall.provisional, false); assert.ok(r.overall.tier);
 });
 test('published worked example produces 522.75 / 1000 with an established grade', () => {
   const f = fixture();
@@ -76,7 +76,7 @@ test('title scoring deduplicates names across scopes and excludes gilding-only a
   f.recordDefinitions[2] = { titleInfo: { titlesByGender: { Male: 'Conqueror' } } };
   f.recordDefinitions[3] = { forTitleGilding: true, titleInfo: { titlesByGender: { Male: 'Gilded' } } };
   assert.equal(titleEvidence(f.profile, f.recordDefinitions).value, 1);
-  delete f.recordDefinitions[2]; assert.equal(titleEvidence(f.profile, f.recordDefinitions).partial, true);
+  delete f.recordDefinitions[2]; assert.equal(titleEvidence(f.profile, f.recordDefinitions).partial, false);
 });
 test('collection scoring merges acquired visible states without counting invisible or duplicate items', () => {
   const f = fixture(); f.profile.characterCollectibles = { data: { c: { collectibles: { 1: { state: 5 }, 2: { state: 0 }, 3: { state: 4 } } } } };
@@ -84,14 +84,14 @@ test('collection scoring merges acquired visible states without counting invisib
   delete f.profile.profileCollectibles;
   assert.equal(calculateAccountRating(f).metrics.find(m => m.id === 'collections').status, 'partial');
 });
-test('missing character data and unknown activity definitions remain partial with lower bounds', () => {
+test('missing characters remain partial while noncatalog activities do not block grades', () => {
   const f = fixture();
   const endgame = endgameEvidence([...f.aggregates, undefined], [{ characterId: 'c' }, { characterId: 'd' }], f.activityDefinitions);
   assert.equal(endgame.raid, 50); assert.equal(endgame.partial, true);
   delete f.activityDefinitions[11];
   const r = calculateAccountRating(f);
-  assert.equal(r.metrics.find(m => m.id === 'raids').status, 'partial');
-  assert.equal(r.overall.coverage, 75); assert.equal(r.overall.tier, null);
+  assert.equal(r.metrics.find(m => m.id === 'raids').status, 'rated');
+  assert.equal(r.overall.coverage, 100); assert.ok(r.overall.tier);
   assert.ok(r.overall.range.min <= r.overall.range.max);
 });
 test('privacy does not become a zero metric or a complete inflated grade', () => {
@@ -116,6 +116,7 @@ test('rating is deterministic and ignores power, idle time, recent login and act
 test('a provisional point stays within its evidence bounds even when partial metrics are strong', () => {
   const f = fixture();
   f.aggregates[0].activities[0].values.activityCompletions.basic.value = 750;
+  f.profile.characters.data.d = { characterId: 'd', classType: 1 };
   f.aggregates[0].activities[1].values.activityCompletions.basic.value = 1000;
   f.aggregates[0].activities.push({ activityHash: 999, values: stats({ activityCompletions: 1 }) });
   const r = calculateAccountRating(f);
@@ -124,10 +125,11 @@ test('a provisional point stays within its evidence bounds even when partial met
   assert.equal(r.overall.score, (r.overall.range.min + r.overall.range.max) / 2);
   assert.equal(r.overall.tier, null);
 });
-test('malformed flags and absent mode metadata cannot fabricate complete rated evidence', () => {
+test('malformed flags and missing eligible counters cannot fabricate complete ratings', () => {
   const f = fixture(); f.profile.profileCollectibles.data.collectibles[3] = {};
   f.profile.profileRecords.data.records[3] = { state: null };
   f.activityDefinitions[10] = {};
+  f.aggregates[0].activities[1].values.activityCompletions.basic.value = null;
   const r = calculateAccountRating(f);
   assert.equal(r.metrics.find(m => m.id === 'collections').value, 1);
   for (const id of ['collections', 'titles', 'raids', 'dungeons']) assert.equal(r.metrics.find(m => m.id === id).status, 'partial');

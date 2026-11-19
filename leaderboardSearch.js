@@ -1,4 +1,5 @@
 const tables = [
+  ['account-rating-body', 'toggleAccountRatingBtn'],
   ['leaderboard-body', 'toggleLeaderboardBtn'],
   ['guardian-rank-body', 'toggleGuardianRankBtn'],
   ['highest-character-body', 'toggleHighestCharacterBtn'],

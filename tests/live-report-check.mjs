@@ -63,6 +63,8 @@ try {
   const ratingAggregates = await Promise.all(ratingCharacters.map(c => c.characterId === character.characterId ? aggregates : api.aggregates(c.characterId, signal)));
   const accountRating = calculateAccountRating({ profile, career, characters: ratingCharacters, aggregates: ratingAggregates, recordDefinitions: ratingRecordDefinitions, activityDefinitions: ratingActivityDefinitions });
   assert.equal(accountRating.metrics.length, 10);
+  assert.equal(accountRating.overall.provisional,false,'Legacy metadata does not make Hawk provisional');
+  assert.ok(accountRating.overall.tier,'Complete public account receives an overall grade');
   assert.ok(accountRating.metrics.every(m => m.score == null || Number.isFinite(m.score) && m.score >= 0 && m.score <= 100));
   assert.ok(accountRating.overall.range.min >= 0 && accountRating.overall.range.max <= 1000);
   if (accountRating.overall.score != null) assert.ok(accountRating.overall.score >= accountRating.overall.range.min - 1e-8 && accountRating.overall.score <= accountRating.overall.range.max + 1e-8, 'Displayed rating stays within its evidence bounds');
