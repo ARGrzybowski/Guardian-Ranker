@@ -213,6 +213,7 @@ cohort as (
 ), page as (
   select * from ranked order by score desc,membership_id
   limit greatest(1,least(coalesce(p_limit,25),50)) offset greatest(0,least(coalesce(p_offset,0),1000000))
+)
 select jsonb_build_object(
   'total',(select count(*) from ranked),
   'rows',coalesce((select jsonb_agg(to_jsonb(page) order by page.score desc,page.membership_id) from page),'[]'),
