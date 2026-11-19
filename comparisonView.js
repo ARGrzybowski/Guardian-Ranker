@@ -1,6 +1,6 @@
 import { searchExactName, loadPlayerProfile, formatBungieName } from './bungieApi.js';
 import { overviewStats } from './reportData.js';
-import { loadGuardianStandings } from './performanceView.js';
+import { bestCrucibleSeasonText, loadGuardianStandings } from './performanceView.js';
 import { PERFORMANCE_METRICS } from './performanceRating.js';
 import { escapeHtml as e } from './html.js';
 
@@ -38,11 +38,13 @@ function ratingComparison(primary, other, leftStanding, rightStanding) {
   const listedGaps = largest.map(row =>
     `<li>${e(row.name)} · ${number(Math.abs(row.difference), 2)} points in favor of ${e(row.difference > 0 ? primary : other)}</li>`).join('');
   const metrics = rows.map(row => `<tr><th scope="row">${e(row.name)}</th><td>${number(row.primary, 2)}</td><td>${number(row.compared, 2)}</td><td>${gap(row.difference)}</td></tr>`).join('');
+  const season = row => bestCrucibleSeasonText(row?.metrics.find(metric => metric.id === 'seasonKd'));
   const percentileRow = (label, a, b, differenceFn = delta) => `<tr><th scope="row">${e(label)}</th><td>${number(a?.percentile, 2)}</td><td>${number(b?.percentile, 2)}</td><td>${gap(differenceFn(a?.percentile, b?.percentile))}</td></tr>`;
   return {
     html: `<h4>Performance comparison · ${e(leftStanding.version)}</h4>
     ${table('Points and standings among eligible Guardians', primary, other, 'First − second', `
       <tr><th scope="row">Performance points</th><td>${number(left?.points, 2)}</td><td>${number(right?.points, 2)}</td><td>${gap(difference)}</td></tr>
+      <tr><th scope="row">Best past Crucible season</th><td>${e(season(left))}</td><td>${e(season(right))}</td><td>—</td></tr>
       ${percentileRow('Performance percentile', left, right, performanceDelta)}
       ${percentileRow('Knowledge percentile', leftStanding.knowledge, rightStanding.knowledge)}
       ${percentileRow('Commendations percentile', leftStanding.commendations, rightStanding.commendations)}`)}

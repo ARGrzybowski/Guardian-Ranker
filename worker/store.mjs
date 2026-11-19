@@ -73,7 +73,7 @@ export class IndexStore {
     return this.rpc('fail_guardian_rating', { p_id: row.membership_id, p_next: nextRating, p_private: isPrivate });
   }
   duePerformance(now, limit) {
-    return this.rpc('get_guardian_performance_due', { p_now: now, p_limit: limit });
+    return this.rpc('get_guardian_season_due', { p_now: now, p_limit: limit });
   }
   async performanceCatalog() {
     return (await this.select('guardian_performance_catalog', { select: 'payload', singleton: 'eq.true' }))[0]?.payload;
@@ -83,19 +83,28 @@ export class IndexStore {
       method: 'POST', body: { singleton: true, payload }, prefer: 'resolution=merge-duplicates,return=minimal'
     });
   }
-  savePerformance(id, rating, nextRating) {
-    return this.request('guardian_performance?on_conflict=membership_id', {
+  async crucibleProgress(id) {
+    return (await this.select('guardian_crucible_progress', { select: 'scans', membership_id: `eq.${id}`, limit: 1 }))[0]?.scans;
+  }
+  saveCrucibleProgress(id, scans, rows, seasons, now) {
+    return this.rpc('save_guardian_crucible_progress', { p_id: id, p_scans: scans, p_matches: rows, p_seasons: seasons, p_now: now });
+  }
+  savePerformance(id, rating, seasonId, nextRating) {
+    return this.request('guardian_season_performance?on_conflict=membership_id', {
       method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
       body: {
-        membership_id: id, credit_version: rating.version, precise_points: rating.points,
-        credit_eligible: rating.eligible, credit_metrics: rating.metrics,
+        membership_id: id, rating_version: rating.version, season_id: seasonId, points: rating.points,
+        eligible: rating.eligible, metrics: rating.metrics,
         competitive_peak: rating.competitivePeak, commendations: rating.commendations,
-        credit_rated_at: rating.calculatedAt, next_rating_at: nextRating, consecutive_errors: 0
+        rated_at: rating.calculatedAt, next_rating_at: nextRating, consecutive_errors: 0
       }
     });
   }
+  deferPerformance(id, nextRating) {
+    return this.patch('guardian_season_performance', 'membership_id', id, { next_rating_at: nextRating, consecutive_errors: 0 });
+  }
   failPerformance(id, nextRating, isPrivate) {
-    return this.rpc('fail_guardian_performance', { p_id: id, p_next: nextRating, p_private: isPrivate });
+    return this.rpc('fail_guardian_season_performance', { p_id: id, p_next: nextRating, p_private: isPrivate });
   }
   save(requestedId, snapshot, nextRefresh) {
     return this.rpc('save_guardian_snapshot', { p_requested_id: requestedId, p_snapshot: snapshot, p_next_refresh_at: nextRefresh });

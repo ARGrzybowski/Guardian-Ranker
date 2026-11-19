@@ -2,12 +2,14 @@
 // Run by GitHub Actions only; local tests use entirely mocked responses.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { searchExactName, loadPlayerProfile } from '../bungieApi.js';
+import { searchExactName, loadPlayerProfile, bungieRequest } from '../bungieApi.js';
 import { REPORT_COMPONENTS, overviewStats, createReportApi, careerGroups, collectionEntries, recordEntries, catalogueEntries } from '../reportData.js';
 import { createManifestClient } from '../manifest.js';
 import { aggregateEntries } from '../reportInsights.js';
-import { calculatePerformance, CONTEST_RECORDS, TRIALS_TRACKERS, COMPETITIVE_PROGRESSION } from '../performanceRating.js';
+import { calculatePerformance, CONTEST_RECORDS, TRIALS_TRACKERS, COMPETITIVE_PROGRESSION, PERFORMANCE_VERSION } from '../performanceRating.js';
 import { compactPerformanceActivities } from '../worker/performance.mjs';
+import { collectCrucibleSeasons } from '../worker/crucible.mjs';
+import { crucibleSeasons } from '../crucibleSeasons.js';
 import { DUNGEON_SOLO_RECORDS } from '../activityCredit.js';
 import { eververseCollection, valueEververseCollection } from '../eververseValue.js';
 
@@ -76,15 +78,32 @@ try {
   }
   const ratingCharacters = Object.values(profile.characters.data);
   const ratingAggregates = await Promise.all(ratingCharacters.map(c => c.characterId === character.characterId ? aggregates : api.aggregates(c.characterId, signal)));
-  const histories = await Promise.all(ratingCharacters.map(c => api.history(c.characterId, 5, 0, signal).then(page => ({ activities: page.activities ?? [] }))));
-  const ratingInput = { profile, career, characters: ratingCharacters, aggregates: ratingAggregates, histories };
+  const seasons = crucibleSeasons(await manifest.table('DestinySeasonDefinition', signal));
+  let matchCount;
+  const crucible = await collectCrucibleSeasons({
+    store: { crucibleProgress: async () => undefined, saveCrucibleProgress: async (_, scans, matches, windows, now) => {
+      matchCount = matches.length;
+      return windows.map(season => {
+        const included = matches.filter(match => Date.parse(match.period) >= Date.parse(season.start) &&
+          Date.parse(match.period) <= Date.parse(now) && (!season.end || Date.parse(match.period) < Date.parse(season.end)));
+        const total = field => included.some(match => match[field] == null) ? null : included.reduce((sum, match) => sum + match[field], 0);
+        return { season_id: season.id, matches: included.length, kills: total('kills'), deaths: total('deaths') };
+      });
+    } }, request: path => bungieRequest(path, { signal }).then(r => r.Response),
+    member: { membership_type: loaded.membership.membershipType, membership_id: loaded.membership.membershipId },
+    characters: ratingCharacters, seasons, now: new Date()
+  });
+  assert.ok(Number.isInteger(matchCount), 'Cloud season collector reads public match pages');
+  const ratingInput = { profile, career, characters: ratingCharacters, aggregates: ratingAggregates, crucible };
   const performance = calculatePerformance({ ...ratingInput, activityDefinitions: ratingActivityDefinitions });
   const cloudProjection = calculatePerformance({ ...ratingInput, activityDefinitions: compactPerformanceActivities(ratingActivityDefinitions) });
-  assert.equal(performance.version, 'GR-3.1');
+  assert.equal(performance.version, PERFORMANCE_VERSION);
   assert.equal(performance.metrics.length, 11);
   assert.deepEqual(cloudProjection.metrics, performance.metrics);
-  assert.ok(performance.complete && performance.eligible, JSON.stringify(performance.metrics.filter(metric => metric.points == null)));
-  assert.ok(Math.abs(performance.points - performance.metrics.reduce((sum, metric) => sum + metric.points, 0)) < 1e-7);
+  if (crucible.currentComplete) {
+    assert.ok(performance.complete && performance.eligible, JSON.stringify(performance.metrics.filter(metric => metric.points == null)));
+    assert.ok(Math.abs(performance.points - performance.metrics.reduce((sum, metric) => sum + metric.points, 0)) < 1e-7);
+  } else assert.equal(performance.metrics.find(metric => metric.id === 'seasonKd').points, null);
   console.log(JSON.stringify({ account: 'Hawk#7753', ratingVersion: performance.version, points: performance.points,
     metrics: performance.metrics.map(m => ({ id: m.id, value: m.value, points: m.points, matches: m.matches, events: m.events })) }));
   console.log(JSON.stringify({
