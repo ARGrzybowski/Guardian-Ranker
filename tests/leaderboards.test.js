@@ -60,13 +60,13 @@ test('power reads the verified ranking view with correct column names', async ()
   assert.equal(reads.at(-1).orders[0].field, 'light_level');
 });
 test('account rating reads cloud-verified scores and links to the rating report', async () => {
-  rows = [{ membership_id:'1',bungie_name:'Hawk#7753',points:917,percentile:91.6,standing:7 }];
+  rows = [{ membership_id:'1',bungie_name:'Hawk#7753',points:917.36,percentile:91.6,standing:7 }];
   await boards.loadAccountRatingLeaderboard();
-  assert.equal(reads.at(-1).table,'guardian_performance_rankings');
+  assert.equal(reads.at(-1).table,'guardian_activity_rankings');
   assert.equal(reads.at(-1).orders[0].field,'points');
   const row=elements['account-rating-body'].children[0];
   assert.equal(row.children[0].textContent,7);
-  assert.equal(row.children[2].textContent,'917');
+  assert.equal(row.children[2].textContent,'917.36');
   assert.equal(row.children[3].textContent,'91.6');
   assert.match(row.children[1].children[0].href,/#rating$/);
 });

@@ -17,7 +17,7 @@ const fixtureRows = Array.from({ length: 8 }, (_, i) => ({
   class_type: 'Titan', light_level: 400 - i, points: 900-i, standing: i+1, percentile: 99-i, cohort_size: 50, commendations: 800-i
 }));
 const performanceRow = (contest, percentile) => ({
-  rating_version: 'GR-3.0', points: contest * 250, eligible: true, standing: contest === 2 ? 4 : 10,
+  rating_version: 'GR-3.1', points: contest * 250, eligible: true, standing: contest === 2 ? 4 : 10,
   percentile, cohort_size: 50, last_rated_at: '2026-11-18T12:00:00Z',
   metrics: PERFORMANCE_METRICS.map(metric => ({ ...metric, points: metric.id === 'raidContest' ? contest * 250 : 0, value: metric.id === 'raidContest' ? contest : 0 }))
 });
@@ -42,7 +42,7 @@ window.supabase = { createClient: () => ({
       eq: (_, id) => { memberId=id; return query; },
       abortSignal: () => query,
       maybeSingle: async () => {
-        if (table === 'guardian_performance_reports') {
+        if (table === 'guardian_activity_reports') {
           if (memberId === 'retry' && window.__standingRetry) return { data: null, error: { message: 'Temporary failure' } };
           return { data: window.__performanceRows[memberId] || window.__performanceRows.hawk, error };
         }
@@ -279,9 +279,9 @@ try {
   await evaluate("{ const original = URL.createObjectURL.bind(URL); URL.createObjectURL = blob => { window.__lastDownloadText = blob.text(); return original(blob); }; HTMLAnchorElement.prototype.click = function() {}; document.querySelector('.aggregate-csv').click(); }");
   assert.ok((await evaluate('window.__lastDownloadText')).includes('Test Dungeon'));
   assert.ok(!(await evaluate('window.__lastDownloadText')).includes('Test Raid'));
-  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 8");
+  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 11");
   assert.ok(await evaluate("document.querySelector('.rating-coverage').textContent.includes('#10 of 50')"));
-  assert.ok(await evaluate("document.querySelector('#report-rating').textContent.includes('GR-3.0')"));
+  assert.ok(await evaluate("document.querySelector('#report-rating').textContent.includes('GR-3.1')"));
   assert.equal(await evaluate("document.querySelectorAll('.rating-dimension').length"), 2);
   assert.ok(await evaluate("document.querySelector('.rating-tier').textContent.includes('82%')"));
   assert.equal(await evaluate('window.location.hash'), '#rating');
@@ -313,8 +313,8 @@ try {
   const primaryStatsRequests = apiCalls.filter(url => url.includes('/Account/hawk/') && url.includes('/Stats/')).length;
   await evaluate("document.querySelector('.compare-form input').value = 'Rival#1234'; document.querySelector('.compare-form').requestSubmit()");
   await waitFor("document.querySelector('.comparison-status').textContent === 'Comparison ready.'");
-  assert.equal(await evaluate("document.querySelectorAll('.comparison-ratings tbody tr').length"), 12);
-  assert.equal(await evaluate("document.querySelectorAll('.compare-metrics tbody tr').length"), 8);
+  assert.equal(await evaluate("document.querySelectorAll('.comparison-ratings tbody tr').length"), 15);
+  assert.equal(await evaluate("document.querySelectorAll('.compare-metrics tbody tr').length"), 11);
   assert.ok(await evaluate("document.querySelector('.compare-drivers').textContent.includes('250 points in favor of Rival#1234')"));
   assert.equal(primaryStatsRequests, apiCalls.filter(url => url.includes('/Account/hawk/') && url.includes('/Stats/')).length, 'Comparison reuses current player rating data');
   assert.equal(await evaluate("new URL(location.href).searchParams.get('compare')"), 'Rival#1234');
@@ -327,10 +327,10 @@ try {
   assert.equal(exported.sections.activityRecords.rows.length, 6);
   assert.equal(exported.sections.activityRecords.coverage.charactersLoaded, 3);
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
-  assert.equal(exported.sections.accountRating.version, 'GR-3.0');
+  assert.equal(exported.sections.accountRating.version, 'GR-3.1');
   assert.equal(exported.sections.accountRating.performance.percentile, 82);
   assert.equal(exported.sections.accountRating.knowledge.percentile, 88);
-  assert.equal(exported.sections.comparison.rating.version, 'GR-3.0');
+  assert.equal(exported.sections.comparison.rating.version, 'GR-3.1');
   assert.equal(exported.sections.comparison.rating.overallDifference, -250);
   assert.equal(exported.sections.comparison.rating.metrics.find(m => m.id === 'raidContest').difference, -250);
   await evaluate("document.querySelector('[data-section=overview]').click()");
@@ -385,12 +385,12 @@ try {
   await evaluate("document.querySelector('#report-endgame').scrollIntoView({block:'start'})");
   const mobileRecords = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'activity-records-mobile.png'), Buffer.from(mobileRecords.data, 'base64'));
-  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 8");
+  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 11");
   await evaluate("document.querySelector('#report-rating').scrollIntoView({block:'start'})");
   const mobileRating = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'account-rating-mobile.png'), Buffer.from(mobileRating.data, 'base64'));
   await cdp('Page.navigate', { url: `${origin}/?name=Hawk%237753#rating` });
-  await waitFor("document.querySelectorAll('.rating-metric').length === 8 && document.querySelector('.rating-tier').textContent.includes('82%')");
+  await waitFor("document.querySelectorAll('.rating-metric').length === 11 && document.querySelector('.rating-tier').textContent.includes('82%')");
   assert.equal(await evaluate("document.querySelector('#report-rating').hidden"), false, 'Shared rating links open and calculate the correct section');
   await cdp('Page.navigate', { url: `${origin}/?name=Hawk%237753&compare=Partial%231234#compare` });
   await waitFor("document.querySelector('.comparison-ratings')?.textContent.includes('Partial#1234') && document.querySelector('.comparison-status').textContent === 'Comparison ready.'");

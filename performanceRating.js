@@ -1,7 +1,8 @@
 import { endgameEvidence } from './accountRating.js';
 import { careerGroups, mergeActivities, statValue } from './reportData.js';
+import { additionalActivityEvidence, diminishingPoints, publicRecordProof, soloDungeonEvidence } from './activityCredit.js';
 
-export const PERFORMANCE_VERSION = 'GR-3.0';
+export const PERFORMANCE_VERSION = 'GR-3.1';
 export const PERFORMANCE_COMPONENTS = '100,200,202,900,1100,1400';
 export const COMPETITIVE_PROGRESSION = '3696598664';
 export const TRIALS_TRACKERS = ['1765255052', '3273582723'];
@@ -33,6 +34,9 @@ export const PERFORMANCE_METRICS = [
   { id: 'raidContest', name: 'Verified raid contest clears', group: 'Raids', unit: 'events' },
   { id: 'dungeonClears', name: 'Dungeon completions', group: 'Dungeons', unit: 'completions' },
   { id: 'dungeonContest', name: 'Verified dungeon contest clears', group: 'Dungeons', unit: 'events' },
+  { id: 'dungeonSolo', name: 'Best solo dungeon achievements', group: 'Dungeons', unit: 'dungeons' },
+  { id: 'grandmasterClears', name: 'Grandmaster Nightfall clears', group: 'Operations', unit: 'completions' },
+  { id: 'soloOpsClears', name: 'Solo Ops clears', group: 'Operations', unit: 'completions' },
   { id: 'competitivePeak', name: 'Best observed Competitive score', group: 'Crucible', unit: 'division points' },
   { id: 'trialsFlawless', name: 'Trials flawless passages', group: 'Crucible', unit: 'passages' },
   { id: 'lifetimeKd', name: 'Lifetime Crucible K/D', group: 'Crucible', unit: 'K/D' },
@@ -44,20 +48,12 @@ const stat = (values, name) => counter(statValue(values, name));
 const day = 86400000;
 
 export function contestEvidence(profile) {
-  const records = profile.profileRecords?.data?.records;
-  if (!records) return null;
-  const scopes = [records, ...Object.values(profile.characterRecords?.data || {}).map(scope => scope?.records)];
-  return Object.entries(CONTEST_RECORDS).flatMap(([hash, event]) => {
-    const cleared = scopes.some(scope => {
-      const record = scope?.[hash];
-      const state = counter(record?.state);
-      return state != null && !(state & (4 | 16)) && (
-        Boolean(state & 1) ||
-        (record.objectives?.length > 0 && record.objectives.every(objective => objective.complete === true))
-      );
-    });
-    return cleared ? [{ ...event, hash }] : [];
-  });
+  return contestClears(publicRecordProof(profile));
+}
+
+function contestClears(isVerified) {
+  if (!isVerified) return null;
+  return Object.entries(CONTEST_RECORDS).flatMap(([hash, event]) => isVerified(hash) ? [{ ...event, hash }] : []);
 }
 
 export function competitiveEvidence(profile, previousPeak) {
@@ -95,47 +91,49 @@ export function recentKdEvidence(histories, characters, now) {
   return kdEvidence(values.reduce((sum, [kills]) => sum + kills, 0), values.reduce((sum, [, deaths]) => sum + deaths, 0), recent.length, 35, 65);
 }
 
-// Entry credit goes to breadth. Repeats add two points each for the first 25
-// repeats per activity type, then one each through the 100th repeat.
-function clearPoints(total, families, firstClearPoints) {
-  const repeats = Math.max(0, total - families);
-  return families * firstClearPoints + Math.min(repeats, 25) * 2 + Math.min(Math.max(repeats - 25, 0), 75);
-}
-
-function flawlessPoints(value) {
-  if (!value) return 0;
-  return 30 + Math.min(value - 1, 9) * 8 + Math.min(Math.max(0, value - 10), 40) * 2 + Math.min(Math.max(0, value - 50), 50);
+function clearCredit(families, type, firstClear, repeatPool, incomplete) {
+  const evidence = families.filter(family => family.type === type).map(({ name, completions }) => ({
+    name, completions, points: diminishingPoints(completions, firstClear, repeatPool)
+  })).sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+  return {
+    value: incomplete ? null : evidence.reduce((sum, family) => sum + family.completions, 0), families: evidence.length,
+    points: incomplete ? null : evidence.reduce((sum, family) => sum + family.points, 0), activities: evidence
+  };
 }
 
 export function calculatePerformance({ profile, characters, aggregates, activityDefinitions, career, histories, previousPeak, now = new Date() }) {
   const endgame = endgameEvidence(aggregates, characters, activityDefinitions);
-  const contest = contestEvidence(profile);
+  const ops = additionalActivityEvidence(aggregates, characters, activityDefinitions);
+  const isVerified = publicRecordProof(profile);
+  const contest = contestClears(isVerified);
+  const soloDungeon = soloDungeonEvidence(isVerified);
   const comp = competitiveEvidence(profile, previousPeak);
   const flawless = flawlessEvidence(profile);
   const pvp = careerGroups(career).allPvP?.allTime;
   const games = stat(pvp, 'activitiesEntered');
   const lifetime = kdEvidence(stat(pvp, 'kills') ?? (games === 0 ? 0 : null), stat(pvp, 'deaths') ?? (games === 0 ? 0 : null), games, 100, 100);
   const recent = recentKdEvidence(histories, characters, now);
-  const ordinary = (type, points) => ({
-    value: endgame[type], families: endgame[`${type}Breadth`],
-    points: endgame.familyPartial || endgame[type] == null ? null : clearPoints(endgame[type], endgame[`${type}Breadth`], points)
-  });
+  const ordinary = (type, points) => clearCredit(endgame.families, type, points, 4, endgame.familyPartial || endgame[type] == null);
+  const operation = (type, points, pool) => clearCredit(ops?.families ?? [], type, points, pool, !ops || ops.missingCounters.has(type));
   const challenge = (type, points) => {
     const events = contest?.filter(event => event.type === type);
     return { value: events?.length ?? null, points: events == null ? null : events.length * points, events };
   };
+  const grandmaster = operation('grandmaster', 10, 4);
   const evidence = {
     raidClears: ordinary('raid', 15), raidContest: challenge('raid', 250),
     dungeonClears: ordinary('dungeon', 12), dungeonContest: challenge('dungeon', 200),
+    dungeonSolo: soloDungeon, grandmasterClears: grandmaster, soloOpsClears: operation('soloOps', 3, 2),
     competitivePeak: { ...comp, points: comp.value == null ? null : Math.floor(comp.value / 50) },
-    trialsFlawless: { ...flawless, points: flawless.value == null ? null : flawlessPoints(flawless.value) },
+    trialsFlawless: { ...flawless, points: flawless.value == null ? null : diminishingPoints(flawless.value, 30, 16) },
     lifetimeKd: lifetime, recentKd: recent
   };
   const metrics = PERFORMANCE_METRICS.map(metric => ({ ...metric, ...evidence[metric.id] }));
   const complete = metrics.every(metric => metric.points != null);
-  const eligible = complete && ((endgame.raid + endgame.dungeon) >= MIN_RAID_DUNGEON_CLEARS || games >= MIN_CRUCIBLE_ACTIVITIES || contest.length > 0);
+  const clears = endgame.raid + endgame.dungeon + grandmaster.value;
+  const eligible = complete && (clears >= MIN_RAID_DUNGEON_CLEARS || games >= MIN_CRUCIBLE_ACTIVITIES || contest.length > 0 || soloDungeon.value > 0);
   return {
-    version: PERFORMANCE_VERSION, points: complete ? metrics.reduce((sum, metric) => sum + metric.points, 0) : null,
+    version: PERFORMANCE_VERSION, points: complete ? Number(metrics.reduce((sum, metric) => sum + metric.points, 0).toFixed(8)) : null,
     metrics, complete, eligible, competitivePeak: comp.value,
     commendations: counter(profile.profileCommendations?.data?.totalScore),
     calculatedAt: now.toISOString()

@@ -39,8 +39,6 @@ jobs:
         env:
           BROWSER_PATH: /usr/bin/google-chrome
         run: node tests/browser-smoke.mjs
-      - name: Verify public Bungie response schemas from the cloud
-        run: node tests/live-report-check.mjs
       - name: Verify migration and database permissions in disposable PostgreSQL
         env:
           PGHOST: 127.0.0.1
@@ -60,3 +58,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f tests/sql/rating-depth.sql
           psql -v ON_ERROR_STOP=1 -f supabase/performance-rankings.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/performance-rankings.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/activity-credit.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/activity-credit.sql
+      - name: Verify public Bungie response schemas from the cloud
+        run: node tests/live-report-check.mjs

@@ -12,9 +12,9 @@ const measurements = {
 const ratingComponents = '100,200,800,900,1400';
 const number = (value, digits = 0) => value == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const gapFormat = new Intl.NumberFormat(undefined, {
-  maximumFractionDigits: 1, signDisplay: 'exceptZero'
+  maximumFractionDigits: 2, signDisplay: 'exceptZero'
 });
-const gap = value => value == null ? '—' : gapFormat.format(Math.sign(value) * Math.round(Math.abs(value) * 10) / 10);
+const gap = value => value == null ? '—' : gapFormat.format(value);
 
 function table(caption, left, right, gapLabel, rows) {
   return `<div class="report-table-wrap"><table class="report-table"><caption>${e(caption)}</caption><thead><tr>
@@ -27,24 +27,26 @@ function ratingComparison(primary, other, leftStanding, rightStanding) {
   const leftMetrics = new Map(left?.metrics.map(metric => [metric.id, metric.points]));
   const rightMetrics = new Map(right?.metrics.map(metric => [metric.id, metric.points]));
   const delta = (a, b) => a == null || b == null ? null : a - b;
+  const sameModel = leftStanding.version === rightStanding.version;
+  const performanceDelta = (a, b) => sameModel ? delta(a, b) : null;
   const rows = PERFORMANCE_METRICS.map(metric => {
     const a = leftMetrics.get(metric.id) ?? null, b = rightMetrics.get(metric.id) ?? null;
-    return { ...metric, primary: a, compared: b, difference: delta(a, b) };
+    return { ...metric, primary: a, compared: b, difference: performanceDelta(a, b) };
   });
-  const difference = delta(left?.points, right?.points);
+  const difference = performanceDelta(left?.points, right?.points);
   const largest = rows.filter(row => row.difference).sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference)).slice(0, 3);
   const listedGaps = largest.map(row =>
-    `<li>${e(row.name)} · ${number(Math.abs(row.difference))} points in favor of ${e(row.difference > 0 ? primary : other)}</li>`).join('');
-  const metrics = rows.map(row => `<tr><th scope="row">${e(row.name)}</th><td>${number(row.primary)}</td><td>${number(row.compared)}</td><td>${gap(row.difference)}</td></tr>`).join('');
-  const percentileRow = (label, a, b) => `<tr><th scope="row">${e(label)}</th><td>${number(a?.percentile, 2)}</td><td>${number(b?.percentile, 2)}</td><td>${gap(delta(a?.percentile, b?.percentile))}</td></tr>`;
+    `<li>${e(row.name)} · ${number(Math.abs(row.difference), 2)} points in favor of ${e(row.difference > 0 ? primary : other)}</li>`).join('');
+  const metrics = rows.map(row => `<tr><th scope="row">${e(row.name)}</th><td>${number(row.primary, 2)}</td><td>${number(row.compared, 2)}</td><td>${gap(row.difference)}</td></tr>`).join('');
+  const percentileRow = (label, a, b, differenceFn = delta) => `<tr><th scope="row">${e(label)}</th><td>${number(a?.percentile, 2)}</td><td>${number(b?.percentile, 2)}</td><td>${gap(differenceFn(a?.percentile, b?.percentile))}</td></tr>`;
   return {
     html: `<h4>Performance comparison · ${e(leftStanding.version)}</h4>
     ${table('Points and standings among eligible Guardians', primary, other, 'First − second', `
-      <tr><th scope="row">Performance points</th><td>${number(left?.points)}</td><td>${number(right?.points)}</td><td>${gap(difference)}</td></tr>
-      ${percentileRow('Performance percentile', left, right)}
+      <tr><th scope="row">Performance points</th><td>${number(left?.points, 2)}</td><td>${number(right?.points, 2)}</td><td>${gap(difference)}</td></tr>
+      ${percentileRow('Performance percentile', left, right, performanceDelta)}
       ${percentileRow('Knowledge percentile', leftStanding.knowledge, rightStanding.knowledge)}
       ${percentileRow('Commendations percentile', leftStanding.commendations, rightStanding.commendations)}`)}
-    ${difference == null ? '<p class="report-note">An overall gap requires verified points for both accounts.</p>' : ''}
+    ${difference == null ? '<p class="report-note">An overall gap requires verified points for both accounts under the same scoring model.</p>' : ''}
     ${listedGaps ? `<div class="compare-drivers"><h4>Largest point differences</h4><ul>${listedGaps}</ul></div>` : ''}
     <details class="report-details compare-metrics"><summary>See all performance point contributions</summary>
       ${table('Points by metric', primary, other, 'Points (first − second)', metrics)}

@@ -103,7 +103,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     exported.sections.accountRating = standing;
     const row = standing.performance;
     if (row?.points != null) {
-      ratingPreview.querySelector('.rating-preview-value').textContent = `${number(row.points)} performance points${row.percentile == null ? '' : ` · ${number(row.percentile, 2)} percentile`}`;
+      ratingPreview.querySelector('.rating-preview-value').textContent = `${number(row.points, 2)} performance points${row.percentile == null ? '' : ` · ${number(row.percentile, 2)} percentile`}`;
     }
   }, characters: loadCharacters, career: loadCareer, activities: loadActivities, endgame: () => renderActivityRecords(panel('endgame'), { api, characters, manifest, signal, onExport: data => { exported.sections.activityRecords = data; } }), records: () => loadCatalogue('records'), collections: () => loadCatalogue('collections'), progression: loadProgression, compare: loadComparison };
   container.querySelectorAll('[data-section]').forEach(button => button.addEventListener('click', () => {
