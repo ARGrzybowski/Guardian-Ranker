@@ -3,6 +3,8 @@ import { calculateAccountRating, RATING_VERSION } from '../accountRating.js';
 import { endgameType } from '../reportData.js';
 import { BudgetReached } from './indexer.mjs';
 
+export const MAX_RATINGS_PER_RUN = 6;
+
 export function compactTitles(definitions) {
   return Object.fromEntries(Object.entries(definitions).flatMap(([hash, d]) => {
     const title = Object.values(d.titleInfo?.titlesByGender || {}).find(Boolean) || Object.values(d.titleInfo?.titlesByGenderHash || {}).find(Boolean);
