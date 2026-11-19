@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calculatePerformance, competitiveEvidence, contestEvidence, recentKdEvidence, TRIALS_TRACKERS, COMPETITIVE_PROGRESSION } from '../performanceRating.js';
+import { calculatePerformance, competitiveEvidence, contestEvidence, seasonalKdEvidence, TRIALS_TRACKERS, COMPETITIVE_PROGRESSION } from '../performanceRating.js';
 import { compactPerformanceActivities, createPerformanceRunner, PERFORMANCE_CATALOG_PROJECTION } from '../worker/performance.mjs';
+import { collectCrucibleSeasons } from '../worker/crucible.mjs';
+import { crucibleSeasons } from '../crucibleSeasons.js';
 import { diminishingPoints, DUNGEON_SOLO_RECORDS } from '../activityCredit.js';
 
 const stats = values => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { basic: { value } }]));
@@ -19,7 +21,7 @@ function fixture() {
     },
     career: { mergedAllCharacters: { results: { allPvP: { allTime: stats({ activitiesEntered: 100, kills: 500, deaths: 450, precisionKills: 80, activitiesWon: 60 }) } } } },
     aggregates: [{ activities: [{ activityHash: 10, values: stats({ activityCompletions: 35 }) }] }],
-    histories: [{ activities: [] }],
+    crucible: { seasons: crucibleSeasons({}), totals: [], currentComplete: true, historyComplete: true },
     activityDefinitions: { 10: { activityModeTypes: [4], displayProperties: { name: 'Test Raid' } } }
   };
 }
@@ -116,13 +118,56 @@ test('a lower Competitive division score preserves the exact higher observation'
   assert.equal(missing.commendations, 500);
 });
 
-test('recent K/D excludes older matches and deduplicates match IDs across characters', () => {
-  const match = (instanceId, period, kills, deaths) => ({ period, activityDetails: { instanceId }, values: stats({ kills, deaths }) });
-  const fresh = match('123', '2026-11-18', 12, 4);
-  const old = match('124', '2026-10-01', 500, 1);
-  const result = recentKdEvidence([{ activities: [old, fresh] }, { activities: [fresh] }], [{}, {}], now);
-  assert.equal(result.value, 3); assert.equal(result.matches, 1); assert.equal(result.kills, 12);
-  assert.equal(recentKdEvidence([{ activities: [fresh] }, undefined], [{}, {}], now).points, null);
+test('Monument begins on launch day and past points are displayed independently of overall points', () => {
+  const f = fixture();
+  f.crucible.seasons = crucibleSeasons({ 28: { startDate: '2025-12-02T17:00:00Z', endDate: '2099-01-01', displayProperties: { name: 'Monument of Triumph' } } });
+  assert.equal(f.crucible.seasons[1].start, '2026-06-09T17:00:00Z');
+  f.crucible.totals = [{ season_id: 'monument', kills: 270, deaths: 90, matches: 42 }];
+  const current = calculatePerformance(f);
+  f.crucible.totals.push({ season_id: 'renegades', kills: 2000, deaths: 20, matches: 80 });
+  const withPast = calculatePerformance(f);
+  const card = metric(withPast, 'seasonKd');
+  assert.equal(card.name, 'Current-season Crucible K/D');
+  assert.equal(card.value, 3);
+  assert.equal(card.matches, 42);
+  assert.equal(card.bestSeason.name, 'Renegades');
+  assert.ok(card.bestSeason.points > card.points);
+  assert.equal(withPast.points, current.points);
+  assert.equal(seasonalKdEvidence({ ...f.crucible, currentComplete: false }, now).points, null);
+});
+
+test('season paging resumes older pages, overlaps shifted offsets and indexes across characters', async () => {
+  const match = (instanceId, period) => ({ period, activityDetails: { instanceId }, values: stats({ kills: 8, deaths: 4 }) });
+  const newest = match('126', '2026-11-18T12:00:00Z');
+  const oldInSeason = match('125', '2026-06-09T17:00:00Z');
+  const past = match('124', '2026-06-09T16:59:59Z');
+  let scans, round = 0;
+  const pages = [];
+  const known = new Map();
+  const characters = [{ characterId: 'a' }, { characterId: 'b' }];
+  const options = {
+    store: { crucibleProgress: async () => scans, saveCrucibleProgress: async (_, data, rows) => {
+      scans = data;
+      for (const row of rows) known.set(row.id, row);
+      return [];
+    } },
+    request: async url => {
+      const character = url.split('/Character/')[1][0];
+      const page = Number(url.split('page=')[1]);
+      pages.push([round, character, page]);
+      return { activities: character === 'b' ? (page === 0 ? [oldInSeason] : []) : (
+        (round ? [[newest, oldInSeason], [match('122', '2026-06-09T17:00:00Z')], [match('121', '2026-06-09T17:00:00Z')], [past]] : [[oldInSeason], [match('122', '2026-06-09T17:00:00Z')], [match('121', '2026-06-09T17:00:00Z')]])[page] || []) };
+    }, member: { membership_id: '11', membership_type: 3 }, characters, seasons: crucibleSeasons({}), now
+  };
+  assert.equal((await collectCrucibleSeasons(options)).currentComplete, false);
+  round++;
+  assert.equal((await collectCrucibleSeasons(options)).currentComplete, false, 'head refresh still has pages after reaching the launch boundary');
+  round++;
+  const recovered = await collectCrucibleSeasons(options);
+  assert.equal(recovered.currentComplete, true);
+  assert.equal(recovered.historyComplete, true);
+  assert.deepEqual([...known.keys()].sort(), ['121', '122', '124', '125', '126']);
+  assert.ok(pages.some(([run, character, page]) => run === 1 && character === 'a' && page === 2));
 });
 
 test('a contest proof may qualify a small account and incomplete evidence never does', () => {
@@ -133,7 +178,7 @@ test('a contest proof may qualify a small account and incomplete evidence never 
   f.profile.profileRecords.data.records[2699580344] = { state: 0, objectives: [{ complete: true }, { complete: true }] };
   assert.equal(contestEvidence(f.profile).length, 1);
   assert.equal(calculatePerformance(f).eligible, true);
-  f.histories[0] = null;
+  f.crucible.currentComplete = false;
   assert.equal(calculatePerformance(f).points, null);
 });
 
@@ -141,17 +186,20 @@ test('cloud performance reuses the shared activity catalog and saves exact publi
   const f = fixture(), saved = [];
   const store = {
     duePerformance: async () => [{ membership_id: '123', membership_type: 3, competitive_peak: 4700 }],
-    performanceCatalog: async () => ({ checked_at: now.toISOString(), projection: PERFORMANCE_CATALOG_PROJECTION, activities: f.activityDefinitions }),
+    performanceCatalog: async () => ({ checked_at: now.toISOString(), projection: PERFORMANCE_CATALOG_PROJECTION, activities: f.activityDefinitions, seasons: f.crucible.seasons }),
+    crucibleProgress: async () => undefined,
+    saveCrucibleProgress: async () => [],
     savePerformance: async (...row) => saved.push(row)
   };
   const paths = [];
   const bungie = { request: async path => {
     paths.push(path);
-    const data = path.includes('/Profile/') ? f.profile : path.includes('AggregateActivityStats') ? f.aggregates[0] : path.includes('/Activities/') ? f.histories[0] : f.career;
+    const data = path.includes('/Profile/') ? f.profile : path.includes('AggregateActivityStats') ? f.aggregates[0] : path.includes('/Activities/') ? { activities: [] } : f.career;
     return { Response: data };
   } };
   const result = await createPerformanceRunner()({ store, bungie, now: () => now, limit: 4 });
   assert.equal(result.ratings_saved, 1);
   assert.equal(saved[0][1].points, calculatePerformance(f).points);
-  assert.ok(paths.some(path => path.includes('count=25&mode=5')));
+  assert.equal(saved[0][2], 'monument');
+  assert.ok(paths.some(path => path.includes('count=100&mode=5')));
 });

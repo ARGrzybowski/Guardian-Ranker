@@ -1,12 +1,12 @@
 import { endgameEvidence } from './accountRating.js';
-import { careerGroups, mergeActivities, statValue } from './reportData.js';
+import { careerGroups, statValue } from './reportData.js';
 import { additionalActivityEvidence, diminishingPoints, publicRecordProof, soloDungeonEvidence } from './activityCredit.js';
+import { activeCrucibleSeason } from './crucibleSeasons.js';
 
-export const PERFORMANCE_VERSION = 'GR-3.1';
+export const PERFORMANCE_VERSION = 'GR-3.2';
 export const PERFORMANCE_COMPONENTS = '100,200,202,900,1100,1400';
 export const COMPETITIVE_PROGRESSION = '3696598664';
 export const TRIALS_TRACKERS = ['1765255052', '3273582723'];
-export const RECENT_MATCH_LIMIT = 25;
 export const MIN_RAID_DUNGEON_CLEARS = 20;
 export const MIN_CRUCIBLE_ACTIVITIES = 100;
 
@@ -40,12 +40,11 @@ export const PERFORMANCE_METRICS = [
   { id: 'competitivePeak', name: 'Best observed Competitive score', group: 'Crucible', unit: 'division points' },
   { id: 'trialsFlawless', name: 'Trials flawless passages', group: 'Crucible', unit: 'passages' },
   { id: 'lifetimeKd', name: 'Lifetime Crucible K/D', group: 'Crucible', unit: 'K/D' },
-  { id: 'recentKd', name: 'Recent Crucible K/D', group: 'Crucible', unit: 'K/D' }
+  { id: 'seasonKd', name: 'Current-season Crucible K/D', group: 'Crucible', unit: 'K/D' }
 ];
 
 const counter = value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 const stat = (values, name) => counter(statValue(values, name));
-const day = 86400000;
 
 export function contestEvidence(profile) {
   return contestClears(publicRecordProof(profile));
@@ -79,16 +78,22 @@ function kdEvidence(kills, deaths, matches, priorDeaths, scale) {
   return { value, points, kills, deaths, matches };
 }
 
-export function recentKdEvidence(histories, characters, now) {
-  if (histories?.length !== characters.length || histories.some(page => !Array.isArray(page?.activities))) return { value: null, points: null };
-  const cutoff = now.getTime() - 30 * day;
-  const recent = mergeActivities(histories.map(page => page.activities)).filter(match => {
-    const period = Date.parse(match.period);
-    return period >= cutoff && period <= now.getTime();
-  }).slice(0, RECENT_MATCH_LIMIT);
-  const values = recent.map(match => [stat(match.values, 'kills'), stat(match.values, 'deaths')]);
-  if (values.some(row => row.includes(null))) return { value: null, points: null, matches: recent.length };
-  return kdEvidence(values.reduce((sum, [kills]) => sum + kills, 0), values.reduce((sum, [, deaths]) => sum + deaths, 0), recent.length, 35, 65);
+export function seasonalKdEvidence({ seasons = [], totals = [], currentComplete = false, historyComplete = false, coveredThrough = null } = {}, now) {
+  const current = activeCrucibleSeason(seasons, now);
+  const bySeason = new Map(totals.map(row => [row.season_id, row]));
+  const score = season => {
+    const row = bySeason.get(season.id) || { kills: 0, deaths: 0, matches: 0 };
+    return kdEvidence(counter(row.kills), counter(row.deaths), counter(row.matches), 35, 65);
+  };
+  const past = seasons.filter(season => season.end && Date.parse(season.end) <= now &&
+    (historyComplete || (coveredThrough != null && coveredThrough < Date.parse(season.start))));
+  const bestSeason = past.map(season => ({ ...season, ...score(season) })).filter(row => row.matches > 0 && row.points != null)
+    .sort((a, b) => b.points - a.points || (b.value ?? -1) - (a.value ?? -1) || b.matches - a.matches || Date.parse(b.start) - Date.parse(a.start))[0] ?? null;
+  return {
+    ...(current && currentComplete ? score(current) : { value: null, points: null }),
+    seasonId: current?.id, seasonName: current?.name, seasonStart: current?.start,
+    bestSeason, historyComplete, currentComplete
+  };
 }
 
 function clearCredit(families, type, firstClear, repeatPool, incomplete) {
@@ -101,7 +106,7 @@ function clearCredit(families, type, firstClear, repeatPool, incomplete) {
   };
 }
 
-export function calculatePerformance({ profile, characters, aggregates, activityDefinitions, career, histories, previousPeak, now = new Date() }) {
+export function calculatePerformance({ profile, characters, aggregates, activityDefinitions, career, crucible, previousPeak, now = new Date() }) {
   const endgame = endgameEvidence(aggregates, characters, activityDefinitions);
   const ops = additionalActivityEvidence(aggregates, characters, activityDefinitions);
   const isVerified = publicRecordProof(profile);
@@ -112,7 +117,7 @@ export function calculatePerformance({ profile, characters, aggregates, activity
   const pvp = careerGroups(career).allPvP?.allTime;
   const games = stat(pvp, 'activitiesEntered');
   const lifetime = kdEvidence(stat(pvp, 'kills') ?? (games === 0 ? 0 : null), stat(pvp, 'deaths') ?? (games === 0 ? 0 : null), games, 100, 100);
-  const recent = recentKdEvidence(histories, characters, now);
+  const season = seasonalKdEvidence(crucible, now);
   const ordinary = (type, points) => clearCredit(endgame.families, type, points, 4, endgame.familyPartial || endgame[type] == null);
   const operation = (type, points, pool) => clearCredit(ops?.families ?? [], type, points, pool, !ops || ops.missingCounters.has(type));
   const challenge = (type, points) => {
@@ -126,7 +131,7 @@ export function calculatePerformance({ profile, characters, aggregates, activity
     dungeonSolo: soloDungeon, grandmasterClears: grandmaster, soloOpsClears: operation('soloOps', 3, 2),
     competitivePeak: { ...comp, points: comp.value == null ? null : Math.floor(comp.value / 50) },
     trialsFlawless: { ...flawless, points: flawless.value == null ? null : diminishingPoints(flawless.value, 30, 16) },
-    lifetimeKd: lifetime, recentKd: recent
+    lifetimeKd: lifetime, seasonKd: season
   };
   const metrics = PERFORMANCE_METRICS.map(metric => ({ ...metric, ...evidence[metric.id] }));
   const complete = metrics.every(metric => metric.points != null);

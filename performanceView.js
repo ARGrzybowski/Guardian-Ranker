@@ -1,6 +1,6 @@
 import { getDatabase } from './database.js';
 import { escapeHtml as e } from './html.js';
-import { PERFORMANCE_VERSION } from './performanceRating.js';
+import { PERFORMANCE_METRICS, PERFORMANCE_VERSION } from './performanceRating.js';
 
 const n = (value, digits = 0) => value == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const note = message => `<p class="report-note">${e(message)}</p>`;
@@ -52,6 +52,7 @@ function metricEvidence(metric) {
   if (metric.events?.length) return metric.events.filter(event => !event.tier).map(event => event.name).join(', ');
   if (metric.families != null && metric.value != null) return `${n(metric.value)} completions across ${n(metric.families)} activity families`;
   if (metric.unit === 'K/D') {
+    if (metric.id === 'seasonKd' && !metric.currentComplete) return 'Current-season match history is still indexing.';
     if (metric.matches === 0 && metric.points === 0) return 'No recorded matches';
     if (metric.kills != null && metric.deaths != null) {
       return `${metric.deaths ? n(metric.value, 2) + ' K/D' : 'No recorded deaths'} · ${n(metric.kills)} kills · ${n(metric.deaths)} deaths · ${n(metric.matches)} matches`;
@@ -59,6 +60,12 @@ function metricEvidence(metric) {
     return 'Public K/D counters unavailable';
   }
   return metric.value == null ? 'Public evidence unavailable' : `${n(metric.value, 2)} ${metric.unit}`;
+}
+
+export function bestCrucibleSeasonText(metric) {
+  const best = metric?.bestSeason;
+  if (!best) return metric?.historyComplete ? 'No scored past season' : 'History still indexing';
+  return `${best.name} · ${n(best.points)} points · ${best.value == null ? 'No recorded deaths' : `${n(best.value, 2)} K/D`} · ${n(best.matches)} matches${metric.historyComplete ? '' : ' · history still indexing'}`;
 }
 
 function metricBreakdown(metric) {
@@ -76,7 +83,8 @@ function metricBreakdown(metric) {
 export function drawPerformanceRating(target, { standing, summary, onCompare, onRefresh }) {
   const row = standing.performance;
   const previousModel = row && row.rating_version !== PERFORMANCE_VERSION;
-  const metrics = row?.metrics || [];
+  const metrics = (row?.metrics || []).map(metric => metric.id === 'recentKd'
+    ? PERFORMANCE_METRICS.find(entry => entry.id === 'seasonKd') : metric);
   const groups = [...new Set(metrics.map(metric => metric.group))];
   const result = row?.points == null ? 'Unrated' : `${n(row.points, 2)} points`;
   let status = 'Waiting for a verified cloud score.';
@@ -105,14 +113,15 @@ export function drawPerformanceRating(target, { standing, summary, onCompare, on
         ${metric.id !== 'dungeonSolo' || !metric.events?.length ? note(metricEvidence(metric)) : ''}
         ${metricBreakdown(metric)}
         ${metric.id === 'competitivePeak' ? note('Highest public division score observed by Guardian Ranker since tracking began.') : ''}
-        ${metric.id === 'recentKd' ? note('Latest 25 returned Crucible matches in the last 30 days.') : ''}
+        ${metric.id === 'seasonKd' ? `<p class="report-note">${metric.seasonName ? `${e(metric.seasonName)} · ` : ''}All available current-season matches</p>
+          <div class="crucible-best-season"><strong>Best past season</strong>${note(bestCrucibleSeasonText(metric))}${note('Past-season scores are informational.')}</div>` : ''}
       </article>`).join('')}
     </div></section>`).join('')}
     ${!previousModel ? `<details class="rating-methodology"><summary>How points and standings work</summary>
       <p>The first clear of each raid, dungeon, named Grandmaster Nightfall and Solo Ops mission earns the most. Each subsequent clear of that same activity earns less than the previous one. The same rule applies to repeat Trials flawless passages. Aggregate completions can include checkpoints.</p>
       <p>Each verified contest raid awards 250 points and each verified contest dungeon awards 200. In each dungeon, a verified solo clear earns 50 points and a solo flawless earns 120. Only the strongest verified solo tier earns credit.</p>
       <p>Time played and aggregate fastest times carry zero points. Speed would require a verified full run and a comparable difficulty and ruleset.</p>
-      <p>Crucible points come from the best observed Competitive score, Trials flawless passages, and K/D over lifetime and recent matches. Recent and lifetime K/D use different sample adjustments.</p>
+      <p>Crucible points come from the best observed Competitive score, Trials flawless passages, and lifetime and current-season K/D. Past-season points are informational.</p>
       <p>Standings use fresh public snapshots of tracked, eligible Guardians. Each percentile shows the share of its cohort at or below the player’s score. Knowledge and commendations have their own cohorts.</p>
     </details>` : ''}`;
   target.querySelector('.rating-compare').addEventListener('click', onCompare);

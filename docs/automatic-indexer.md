@@ -6,6 +6,8 @@ Apply `supabase/account-ratings.sql` after the base/capacity/leader-refresh setu
 
 Apply `supabase/performance-rankings.sql` after the previous rating migrations. It adds separate GR-3.0 snapshots and cohort views. Apply `supabase/activity-credit.sql` for GR-3.1 fractional points and version-separated standings. The worker calculates up to four performance snapshots per run, reusing the compact activity catalog and sharing the existing Bungie pacing, operation budget and deadline with discovery. Active accounts target a six-hour refresh and inactive accounts target a daily refresh. The browser reads verified points and percentile standings from Supabase.
 
+Apply `supabase/crucible-seasons.sql` after `supabase/specialty-leaderboards.sql` before deploying the GR-3.2 worker. The existing cloud schedule advances one resumable Crucible history scan per surviving character. Private match IDs and cursors are service-role only. The database sends the totals to the worker, and public views expose the rating and best past season.
+
 The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
 
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase

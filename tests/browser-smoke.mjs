@@ -7,7 +7,7 @@ import { readFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, extname, sep } from 'node:path';
 import { tmpdir } from 'node:os';
-import { PERFORMANCE_METRICS } from '../performanceRating.js';
+import { PERFORMANCE_METRICS, PERFORMANCE_VERSION } from '../performanceRating.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -17,9 +17,11 @@ const fixtureRows = Array.from({ length: 8 }, (_, i) => ({
   class_type: 'Titan', light_level: 400 - i, points: 900-i, standing: i+1, percentile: 99-i, cohort_size: 50, commendations: 800-i
 }));
 const performanceRow = (contest, percentile) => ({
-  rating_version: 'GR-3.1', points: contest * 250, eligible: true, standing: contest === 2 ? 4 : 10,
+  rating_version: PERFORMANCE_VERSION, points: contest * 250, eligible: true, standing: contest === 2 ? 4 : 10,
   percentile, cohort_size: 50, last_rated_at: '2026-11-18T12:00:00Z',
-  metrics: PERFORMANCE_METRICS.map(metric => ({ ...metric, points: metric.id === 'raidContest' ? contest * 250 : 0, value: metric.id === 'raidContest' ? contest : 0 }))
+  metrics: PERFORMANCE_METRICS.map(metric => ({ ...metric, points: metric.id === 'raidContest' ? contest * 250 : 0, value: metric.id === 'raidContest' ? contest : 0,
+    ...(metric.id === 'seasonKd' ? { seasonName: 'Monument of Triumph', currentComplete: true, matches: 0, historyComplete: true,
+      bestSeason: { name: 'Renegades', points: 88, value: 1.65, matches: 120 } } : {}) }))
 });
 const basicStats = values => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { basic: { value } }]));
 const specialtyCatalog = [
@@ -319,7 +321,9 @@ try {
   assert.ok(!(await evaluate('window.__lastDownloadText')).includes('Test Raid'));
   await openSection('rating', "document.querySelectorAll('.rating-metric').length === 11");
   assert.ok(await evaluate("document.querySelector('.rating-coverage').textContent.includes('#10 of 50')"));
-  assert.ok(await evaluate("document.querySelector('#report-rating').textContent.includes('GR-3.1')"));
+  assert.ok(await evaluate(`document.querySelector('#report-rating').textContent.includes('${PERFORMANCE_VERSION}')`));
+  assert.ok(await evaluate("document.querySelector('#report-rating').textContent.includes('Monument of Triumph')"));
+  assert.ok(await evaluate("document.querySelector('.crucible-best-season').textContent.includes('Renegades · 88 points')"));
   assert.equal(await evaluate("document.querySelectorAll('.rating-dimension').length"), 2);
   assert.ok(await evaluate("document.querySelector('.rating-tier').textContent.includes('82%')"));
   assert.equal(await evaluate('window.location.hash'), '#rating');
@@ -351,7 +355,8 @@ try {
   const primaryStatsRequests = apiCalls.filter(url => url.includes('/Account/hawk/') && url.includes('/Stats/')).length;
   await evaluate("document.querySelector('.compare-form input').value = 'Rival#1234'; document.querySelector('.compare-form').requestSubmit()");
   await waitFor("document.querySelector('.comparison-status').textContent === 'Comparison ready.'");
-  assert.equal(await evaluate("document.querySelectorAll('.comparison-ratings tbody tr').length"), 15);
+  assert.equal(await evaluate("document.querySelectorAll('.comparison-ratings tbody tr').length"), 16);
+  assert.ok(await evaluate("document.querySelector('.comparison-ratings').textContent.includes('Best past Crucible season')"));
   assert.equal(await evaluate("document.querySelectorAll('.compare-metrics tbody tr').length"), 11);
   assert.ok(await evaluate("document.querySelector('.compare-drivers').textContent.includes('250 points in favor of Rival#1234')"));
   assert.equal(primaryStatsRequests, apiCalls.filter(url => url.includes('/Account/hawk/') && url.includes('/Stats/')).length, 'Comparison reuses current player rating data');
@@ -367,10 +372,10 @@ try {
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
   assert.equal(exported.sections.eververseNetWorth.brightDust, 300);
   assert.equal(exported.sections.eververseNetWorth.unpricedCount, 1);
-  assert.equal(exported.sections.accountRating.version, 'GR-3.1');
+  assert.equal(exported.sections.accountRating.version, PERFORMANCE_VERSION);
   assert.equal(exported.sections.accountRating.performance.percentile, 82);
   assert.equal(exported.sections.accountRating.knowledge.percentile, 88);
-  assert.equal(exported.sections.comparison.rating.version, 'GR-3.1');
+  assert.equal(exported.sections.comparison.rating.version, PERFORMANCE_VERSION);
   assert.equal(exported.sections.comparison.rating.overallDifference, -250);
   assert.equal(exported.sections.comparison.rating.metrics.find(m => m.id === 'raidContest').difference, -250);
   await evaluate("document.querySelector('[data-section=overview]').click()");
