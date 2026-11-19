@@ -12,6 +12,7 @@ The report aims to expose a useful, inspectable account dossier from public Bung
 | Activity records | Searchable per-character aggregate completion counters, fastest completions, kills/deaths/time; raid, dungeon, Nightfall and character filters; sorting; partial-character retries and filtered CSV export |
 | Triumphs & titles | Search every exposed triumph by name/description; completed/incomplete/redeemed states; objective counters and normalized progress; closest incomplete triumph ordering; filter equippable titles; obscured triumph handling |
 | Collections | Search exposed collectible names/descriptions and acquisition sources; acquired/missing filters; profile and character state merge |
+| Eververse net worth | Estimated Bright Dust value on the Overview, with pricing coverage, category totals, individual prices and JSON export |
 | Progression & metrics | Named public reputation/progression counters, levels, next-level progress and resets; searchable named Bungie metric counters; commendation total and category scores/percentages |
 | Comparison | Compare point contributions, cohort percentiles, and raw profile statistics. Share a link that opens both accounts. |
 | Sharing | Stable `?name=Guardian%231234` URLs; copy link; print loaded content; JSON export with retrieval time, schema version, profile response, and loaded sections |
@@ -25,6 +26,8 @@ The report aims to expose a useful, inspectable account dossier from public Bung
 - [Character playtime](https://bungie-net.github.io/multi/schema_Destiny-Entities-Characters-DestinyCharacterComponent.html) includes idle time and excludes deleted characters. Highest displayed power is the maximum current character power, not a theoretical maximum from inventory.
 
 Definition catalogues load from Bungie's manifest-provided static paths only when needed. Item definitions are resolved individually with bounded concurrency. No player scores are submitted by the report to the database. The existing identity-only enqueue RPC remains the only search write. New sections do not add background indexing workload or a local service.
+
+Eververse net worth matches visible acquired collectibles across the profile and all visible characters. It counts each cosmetic item hash once and uses the lowest listed single-item Bright Dust price from the [Bungie vendor manifest](https://bungie-net.github.io/multi/schema_Destiny-Definitions-DestinyVendorItemDefinition.html). Only cosmetics whose Collections source is explicitly Eververse qualify. Gameplay, special-offer and mixed-source entries, bundles, Bright Engram focusing, and Silver prices contribute no value. Some cosmetics, including many emotes, lack a qualifying Collections entry. Public ownership data does not show how a player acquired an item. The checked-in pricing snapshot is rebuilt on demand from the official manifest by `scripts/build-eververse-catalog.mjs`.
 
 ## Analysis coverage
 

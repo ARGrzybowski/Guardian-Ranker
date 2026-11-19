@@ -3,5 +3,6 @@ exclude:
   - worker
   - supabase
   - tests
+  - scripts
   - node_modules
   - test-artifacts
