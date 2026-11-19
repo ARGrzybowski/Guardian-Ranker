@@ -53,6 +53,7 @@ select pg_temp.assert_io(not exists(select 1 from public.guardian_specialty_scor
 update public.guardian_season_performance set rated_at=null where membership_id='810002';
 select pg_temp.assert_io(not exists(select 1 from public.guardian_specialty_scores where membership_id='810002'), 'invalidated snapshots clear their board rows');
 
+select public.finish_guardian_index_run(owner,'failed','{}') from public.guardian_index_lease where singleton and owner is not null;
 select public.start_guardian_index_run() as run_id \gset
 select public.finish_guardian_index_run(:'run_id','completed','{}');
 create temp table io_count_before as select tracked_count from public.guardian_index_metrics where singleton;
