@@ -164,68 +164,6 @@ ul#suggestions li:hover {
   line-height: 1.2;
 }
 
-/* Stats section */
-.stats-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  box-sizing: border-box;
-}
-
-.stat-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.stat-label {
-  color: #888;
-  font-size: clamp(0.8em, 2vw, 0.9em);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0;
-}
-
-.stat-value {
-  color: #fff;
-  font-size: clamp(1.2em, 4vw, 1.6em);
-  font-weight: bold;
-  margin-top: 0;
-}
-
-.stat-value.high-power {
-  color: #fdff79;
-}
-
-/* Season info */
-.stat-value.season-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-
-.season-info-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: clamp(1em, 3vw, 1.2em);
-  font-weight: bold;
-}
-
-.season-info-top img {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.season-info-dates {
-  font-size: 0.8em;
-  color: #888;
-}
-
 /* Loading spinner */
 .loading-spinner {
   display: flex;
@@ -249,41 +187,49 @@ ul#suggestions li:hover {
   }
 }
 
-/* Search results, featured boards and game status */
+/* Player report and home sidebar */
 .results-container {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
-.home-leaderboards, #game-stats { min-width: 0; }
-#game-stats { max-width: none; background: #19212c; border: 1px solid var(--report-border); overflow-wrap: anywhere; }
-#game-stats .stats-container { gap: 12px; }
-@media (min-width: 1050px) {
-  .results-container { grid-template-columns: minmax(0, 1fr) minmax(14rem, .29fr); }
-  #results { grid-column: 1 / -1; }
-  .home-leaderboards { grid-area: 2 / 1; }
-  #game-stats { grid-area: 2 / 2; }
+.home-sidebar { display: grid; align-content: start; gap: 24px; min-width: 0; }
+@media screen and (min-width: 1000px) {
+  .results-container { grid-template-columns: minmax(0, 1fr) minmax(21rem, 28%); }
+  .home-leaderboards .leaderboards-container { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Weekly reset timer */
-#weekly-reset-timer {
-  margin-top: 6px;
-  font-size: 0.75em;
-  color: #90ee90;
-  font-weight: 600;
-  line-height: 1.3;
-  background-color: #222;
-  padding: 6px 12px;
-  border-radius: 6px;
-  max-width: fit-content;
-  box-shadow: 0 0 6px #90ee90a0;
-  white-space: normal;
-  user-select: none;
+#game-stats {
+  padding: clamp(14px, 2vw, 20px);
+  background: #19212c;
+  border: 1px solid var(--report-border);
+  border-radius: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-.stat-value.season-info > div:last-child {
-  margin-top: 10px;
-}
+#game-stats h2, .home-leaderboards h2 { font-size: 1.25rem; }
+#game-stats h2 { margin: 0 0 14px; }
+.game-season { display: flex; align-items: center; gap: 10px; font-weight: 700; line-height: 1.4; }
+.game-season img { width: 28px; height: 28px; object-fit: contain; flex: none; }
+.game-facts { display: grid; gap: 10px; margin: 0; }
+.game-facts dt, .game-note { color: var(--report-muted); font-size: .82rem; line-height: 1.5; }
+.game-facts dd { margin: 2px 0 0; line-height: 1.45; }
+.game-reset { background: #111923; border-radius: 6px; padding: 10px 12px; margin: 14px 0; }
+.game-countdown { display: inline-block; color: var(--report-accent); font-weight: 600; margin-inline-start: 4px; }
+#game-stats details { border-top: 1px solid var(--report-border); }
+#game-stats summary { color: var(--report-accent); cursor: pointer; font-weight: 600; min-height: 44px; padding: 12px 0; }
+#game-stats a { color: var(--report-accent); }
+#game-stats :focus-visible { outline: 2px solid var(--report-accent); outline-offset: 3px; }
+.game-details-body { padding-bottom: 14px; font-size: .9rem; }
+.game-details-body p { margin: 10px 0 0; }
+#game-season-facts .game-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#season-download { margin-top: 12px; }
+#season-download-status:empty { display: none; }
+.game-milestones-list { display: grid; list-style: none; padding: 0; margin: 8px 0 0; }
+.game-milestones-list li { display: grid; gap: 2px; padding: 8px 0; }
+.game-milestones-list li + li { border-top: 1px solid var(--report-border); }
+
 /* Leaderboard table styling */
 .leaderboard-section {
   background: #19212c;

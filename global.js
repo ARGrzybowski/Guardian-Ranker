@@ -1,228 +1,175 @@
-const API_KEY = '12ecbda2bf10444b8b8058f825f33a43';
-const input = document.getElementById('nameInput');
-const suggestions = document.getElementById('suggestions');
-const results = document.getElementById('results');
-const searchBtn = document.getElementById('searchBtn');
+import { bungieRequest } from './bungieApi.js';
+import { MONUMENT_START } from './crucibleSeasons.js';
+import { escapeHtml as e } from './html.js';
+import { bungieImage, createManifestClient } from './manifest.js?v=20261119-sidebar';
 
-let timeoutId = null;
-let seasonData = null;
-let currentSeasonHash = null;
-let weeklyResetInterval = null;
-let seasonLoadFinished = false;
+const manifest = createManifestClient();
+const gameStats = document.getElementById('game-stats');
+const get = id => gameStats.querySelector(`#${id}`);
+const day = 24 * 60 * 60 * 1000;
+const resetFormat = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const seasonDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' });
 
-function toManifestKey(hash) {
-  return typeof hash === 'number' ? (hash >>> 0).toString() : String(hash);
+function time(date, formatter = resetFormat) {
+  const value = new Date(date);
+  return `<time datetime="${value.toISOString()}">${e(formatter.format(value))}</time>`;
 }
 
-(async function initSeasonData() {
-  renderGlobalGameStats(null); // placeholder first
+function nextReset(now, weekly = false) {
+  const reset = new Date(now);
+  reset.setUTCHours(17, 0, 0, 0);
+  if (weekly) reset.setUTCDate(reset.getUTCDate() + (2 - reset.getUTCDay() + 7) % 7);
+  return +reset + (+reset <= now ? (weekly ? 7 : 1) * day : 0);
+}
 
+function countdown(reset, now) {
+  const remaining = Math.ceil((reset - now) / 60000);
+  const days = Math.floor(remaining / 1440);
+  const hours = Math.floor(remaining % 1440 / 60);
+  const minutes = remaining % 60;
+  return `${time(reset)} <span class="game-countdown">in ${days ? `${days}d ` : ''}${hours ? `${hours}h ` : ''}${minutes}m</span>`;
+}
+
+function renderResets() {
+  const now = Date.now();
+  const weekly = nextReset(now, true);
+  get('weekly-reset-timer').innerHTML = countdown(weekly, now);
+  get('daily-reset-timer').innerHTML = countdown(nextReset(now), now);
+  get('current-game-week').innerHTML = time(weekly - 7 * day);
+}
+
+async function readSeason() {
+  const { Response } = await bungieRequest('/Settings/');
+  const settings = Response?.destiny2CoreSettings ?? Response;
+  if (!settings) throw new Error('Season settings unavailable.');
+  const hash = Number(settings.currentSeasonHash ?? Response.currentSeasonHash) >>> 0;
+  const season = hash ? await manifest.definition('DestinySeasonDefinition', hash) : null;
+  const name = season?.displayProperties?.name?.replace(/^Season:\s*/i, '');
+  return { settings, hash, season, name, monument: name === 'Monument of Triumph' };
+}
+
+function renderSeason(state) {
+  const summary = get('game-season');
+  if (!state?.name) {
+    summary.textContent = 'Current season unavailable.';
+    return;
+  }
+  const icon = bungieImage(state.season.displayProperties?.icon);
+  const title = state.season.seasonNumber ? `Season ${state.season.seasonNumber}: ${state.name}` : state.name;
+  summary.innerHTML = `${icon ? `<img src="${e(icon)}" alt="">` : ''}<span>${e(title)}</span>`;
+}
+
+// Details fetch their data only when opened. A failed request can be retried by reopening.
+function loadWhenOpened(details, target, load) {
+  let pending = false;
+  let expiresAt = 0;
+  details.addEventListener('toggle', async () => {
+    if (!details.open || pending || Date.now() < expiresAt) return;
+    pending = true;
+    target.textContent = 'Loading…';
+    try {
+      const { html, expires = Infinity } = await load();
+      target.innerHTML = html;
+      expiresAt = expires;
+    } catch {
+      target.textContent = 'Bungie data is temporarily unavailable. Reopen this section to retry.';
+    } finally {
+      pending = false;
+    }
+  });
+}
+
+function fact(label, value) {
+  return `<div><dt>${e(label)}</dt><dd>${value}</dd></div>`;
+}
+
+async function seasonDetails(state) {
+  const { settings, season, monument } = state;
+  const [artifact, pass] = await Promise.all([
+    manifest.definition('DestinyArtifactDefinition', settings.currentSeasonalArtifactHash).catch(() => null),
+    manifest.definition('DestinySeasonPassDefinition', settings.currentSeasonPassHash).catch(() => null)
+  ]);
+  const start = Date.parse(monument ? MONUMENT_START : season?.startDate);
+  const end = Date.parse(season?.endDate);
+  const fields = [
+    fact('Launched', Number.isFinite(start) ? time(start, seasonDateFormat) : 'Unavailable'),
+    fact('End date', monument ? 'No announced end date' : Number.isFinite(end) ? time(end, seasonDateFormat) : 'Unavailable'),
+    fact('Seasonal artifact', e(artifact?.displayProperties?.name || 'Unavailable')),
+    fact('Reward pass', e(pass?.displayProperties?.name || 'Unavailable'))
+  ];
+  if (monument) fields.push(fact('Gear Power cap', '550'));
+  const source = monument ? '<p class="game-note"><a href="https://help.bungie.net/hc/en-us/articles/50100493304468--13-Monument-of-Triumph-FAQ">Monument of Triumph FAQ</a></p>' : '';
+  get('season-download').hidden = !state.hash;
+  return { html: `<dl class="game-facts">${fields.join('')}</dl>${source}` };
+}
+
+async function liveMilestones() {
+  const [{ Response }, definitions] = await Promise.all([
+    bungieRequest('/Destiny2/Milestones/'),
+    manifest.table('DestinyMilestoneDefinition')
+  ]);
+  if (!Response) throw new Error('Milestone data unavailable.');
+  const now = Date.now();
+  const rows = Object.entries(Response).flatMap(([hash, milestone]) => {
+    const definition = definitions[milestone.milestoneHash ?? hash];
+    const name = definition?.displayProperties?.name;
+    const start = Date.parse(milestone.startDate);
+    const end = Date.parse(milestone.endDate);
+    if (!name || definition.redacted || start > now || end <= now) return [];
+    const activities = milestone.activities ?? [];
+    const challenges = new Set(activities.flatMap(activity => activity.challengeObjectiveHashes ?? [])).size;
+    return [{ name, end, challenges }];
+  }).sort((a, b) => b.challenges - a.challenges || a.name.localeCompare(b.name));
+
+  const entries = rows.map(({ name, end, challenges }) => {
+    const metadata = [
+      challenges ? `${challenges} ${challenges === 1 ? 'challenge' : 'challenges'}` : '',
+      Number.isFinite(end) ? `Ends ${time(end)}` : ''
+    ].filter(Boolean);
+    return `<li><strong>${e(name)}</strong>${metadata.length ? `<span class="game-note">${metadata.join(' · ')}</span>` : ''}</li>`;
+  });
+  const html = entries.length ? `<ul class="game-milestones-list" role="list">${entries.join('')}</ul>` : '<p>No live milestones listed by Bungie.</p>';
+  return { html, expires: Math.min(nextReset(now), ...rows.filter(row => Number.isFinite(row.end)).map(row => row.end)) };
+}
+
+async function downloadSeasonData() {
+  const button = get('downloadSeasonDataBtn');
+  const status = get('season-download-status');
+  button.disabled = true;
+  status.textContent = 'Preparing download…';
   try {
-    console.log('[initSeasonData] Fetching Destiny2 Manifest...');
-    const manifestRes = await fetch('https://www.bungie.net/Platform/Destiny2/Manifest/', {
-      headers: { 'X-API-Key': API_KEY }
-    });
-    const manifest = await manifestRes.json();
-    console.log('[initSeasonData] Manifest response:', manifest);
-
-    const seasonDefPath = manifest?.Response?.jsonWorldComponentContentPaths?.en?.DestinySeasonDefinition;
-    if (!seasonDefPath) {
-      throw new Error('Season definitions unavailable.');
-    }
-    console.log('[initSeasonData] Season definition path:', seasonDefPath);
-
-    seasonData = await (await fetch(`https://www.bungie.net${seasonDefPath}`)).json();
-    console.log('[initSeasonData] Loaded seasonData keys:', Object.keys(seasonData).length);
-
-    console.log('[initSeasonData] Fetching Destiny2 Settings...');
-    const settingsRes = await fetch('https://www.bungie.net/Platform/Settings/', {
-      headers: { 'X-API-Key': API_KEY }
-    });
-    const settingsData = await settingsRes.json();
-    console.log('[initSeasonData] Settings response:', settingsData);
-
-    // Unified assignment to avoid overwriting
-    const settingsResponse = settingsData.Response;
-    currentSeasonHash = settingsResponse?.destiny2CoreSettings?.currentSeasonHash
-                         || settingsResponse?.currentSeasonHash
-                         || null;
-
-    if (currentSeasonHash) {
-      console.log('[initSeasonData] Using currentSeasonHash:', currentSeasonHash);
-      console.log('[initSeasonData] Normalized key:', toManifestKey(currentSeasonHash));
-    } else {
-      console.warn('[initSeasonData] No currentSeasonHash found in settings.');
-    }
-
-    seasonLoadFinished = true;
-    renderGlobalGameStats(currentSeasonHash);
-  } catch (err) {
-    console.error('[initSeasonData] Failed to fetch season data or settings:', err);
-    seasonLoadFinished = true;
-    renderGlobalGameStats(null);
-  }
-})();
-
-function getSeasonInfo(seasonHash) {
-  if (!seasonData) {
-    console.warn('[getSeasonInfo] seasonData not loaded yet.');
-    return { name: 'Loading...', number: '?', image: null, startDate: null, endDate: null };
-  }
-  const seasonDefs = seasonData.DestinySeasonDefinition || seasonData.definitions || seasonData;
-  const key = toManifestKey(seasonHash);
-
-  console.log('[getSeasonInfo] Looking up season with:', {
-    rawHash: seasonHash,
-    normalizedKey: key,
-    sampleKeys: Object.keys(seasonDefs).slice(0, 5)
-  });
-
-  const season = seasonDefs?.[key];
-
-  if (!season) {
-    console.warn(`[getSeasonInfo] No season found for hash ${seasonHash} (key: ${key})`);
-    return {
-      name: `Unknown Season (${seasonHash})`,
-      number: '?',
-      image: null,
-      startDate: null,
-      endDate: null
-    };
-  }
-
-  return {
-    name: season.displayProperties?.name || `Unknown Season (${seasonHash})`,
-    number: season.seasonNumber ?? '?',
-    image: season.displayProperties?.icon ? `https://www.bungie.net${season.displayProperties.icon}` : null,
-    startDate: season.startDate || null,
-    endDate: season.endDate || null
-  };
-}
-
-function startWeeklyResetCountdown() {
-  clearInterval(weeklyResetInterval);
-  const timerEl = document.getElementById('weekly-reset-timer');
-  if (!timerEl) return;
-
-  function update() {
-    const { nextReset, days, hours, minutes } = getNextWeeklyReset();
-    timerEl.textContent = `${nextReset.toLocaleString()} (in ${days}d ${hours}h ${minutes}m)`;
-  }
-
-  update();
-  weeklyResetInterval = setInterval(update, 60000); // update every minute
-}
-
-function getNextWeeklyReset() {
-  const now = new Date();
-  const nextReset = new Date(now);
-
-  nextReset.setUTCHours(17, 0, 0, 0); // Tuesday 17:00 UTC
-  const day = nextReset.getUTCDay();
-  const daysUntilTuesday = day <= 2 ? 2 - day : 9 - day;
-
-  if (daysUntilTuesday > 0) {
-    nextReset.setUTCDate(nextReset.getUTCDate() + daysUntilTuesday);
-  } else if (now >= nextReset) {
-    nextReset.setUTCDate(nextReset.getUTCDate() + 7);
-  }
-
-  const diff = nextReset - now;
-  const totalSeconds = Math.floor(diff / 1000);
-  const days = Math.floor(totalSeconds / (3600 * 24));
-  const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-  return { nextReset, days, hours, minutes };
-}
-
-function renderGlobalGameStats(seasonHash) {
-  const gameStats = document.querySelector('#game-stats .stats-container');
-  if (!gameStats) {
-    console.error('[renderGlobalGameStats] Could not find #game-stats .stats-container');
-    return;
-  }
-
-  console.log('[renderGlobalGameStats] Rendering with seasonHash:', seasonHash);
-
-  // Weekly Reset block
-  const weeklyBlock = `
-    <div class="stat-group">
-      <div class="stat-label">Weekly Reset</div>
-      <div id="weekly-reset-timer" style="white-space: normal;">
-        Loading weekly reset time...
-      </div>
-    </div>
-  `;
-
-  // Debug download button
-  const debugButton = `
-    <div class="stat-group">
-      <button id="downloadSeasonDataBtn" class="site-button" type="button">
-        Download season data
-      </button>
-    </div>
-  `;
-
-  if (!seasonHash || !seasonData) {
-    console.warn('[renderGlobalGameStats] Missing seasonHash or seasonData, showing placeholder.');
-    gameStats.innerHTML = `
-      <div class="stat-group">
-        <div class="stat-label">Season</div>
-        <div class="stat-value season-info">
-          <span>${seasonLoadFinished ? 'Season information unavailable.' : 'Loading season information...'}</span>
-        </div>
-      </div>
-      ${weeklyBlock}
-      ${debugButton}
-    `;
-    startWeeklyResetCountdown();
-    attachDebugDownload();
-    return;
-  }
-
-  const s = getSeasonInfo(seasonHash);
-  const start = s.startDate ? new Date(s.startDate).toLocaleDateString() : 'Unknown';
-  const end = s.endDate ? new Date(s.endDate).toLocaleDateString() : 'Unknown';
-
-  console.log('[renderGlobalGameStats] Season info resolved to:', s);
-
-  gameStats.innerHTML = `
-    <div class="stat-group">
-      <div class="stat-label">Season</div>
-      <div class="stat-value season-info" style="display: flex; flex-direction: column; align-items: flex-start;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          ${s.image ? `<img src="${s.image}" alt="Season Icon" style="height: 24px;">` : ''}
-          <span style="font-weight: bold; font-size: 1.05em;">
-  Season ${s.number}: ${s.name.replace(/Season:\s*/i, '')}
-</span>
-
-        </div>
-        <div style="margin-top: 6px; font-size: 0.8em; color: #888;">
-          ${start} - ${end}
-        </div>
-      </div>
-    </div>
-    ${weeklyBlock}
-    ${debugButton}
-  `;
-
-  startWeeklyResetCountdown();
-  attachDebugDownload();
-}
-
-function attachDebugDownload() {
-  const btn = document.getElementById('downloadSeasonDataBtn');
-  if (!btn) return;
-  btn.addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ seasonData, currentSeasonHash }, null, 2)], {
-      type: 'application/json'
-    });
+    const [{ hash }, seasonData] = await Promise.all([currentSeason(), manifest.table('DestinySeasonDefinition')]);
+    const blob = new Blob([JSON.stringify({ seasonData, currentSeasonHash: hash }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'season-debug.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  });
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'season-data.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = '';
+  } catch {
+    status.textContent = 'Season data could not be downloaded. Try again.';
+  } finally {
+    button.disabled = false;
+  }
 }
+
+let seasonRequest;
+function currentSeason() {
+  seasonRequest ??= readSeason().catch(error => {
+    seasonRequest = null;
+    throw error;
+  });
+  return seasonRequest;
+}
+
+renderResets();
+setInterval(renderResets, 60000);
+void currentSeason().then(renderSeason, () => renderSeason(null));
+loadWhenOpened(get('game-season-details'), get('game-season-facts'), async () => {
+  const state = await currentSeason();
+  renderSeason(state);
+  return seasonDetails(state);
+});
+loadWhenOpened(get('game-milestones-details'), get('game-milestones'), liveMilestones);
+get('downloadSeasonDataBtn').addEventListener('click', downloadSeasonData);
