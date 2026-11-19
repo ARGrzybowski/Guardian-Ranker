@@ -1,4 +1,4 @@
-import { numeric, statValue, recordEntries, careerGroups } from './reportData.js';
+import { numeric, statValue, recordEntries, careerGroups, activityName, endgameType } from './reportData.js';
 
 export const RATING_VERSION = 'GR-2.0';
 export const KD_ANCHORS = [[0, 0], [0.5, 20], [1, 50], [1.5, 75], [2, 90], [3, 100]];
@@ -87,23 +87,26 @@ export function endgameEvidence(aggregates, characters, definitions) {
       const def = definitions?.[hash];
       if (!def || def.redacted) { if (count == null || count > 0) unclassified++; continue; }
       if (!Array.isArray(def.activityModeTypes) && valid(def.directActivityModeType) == null) { if (count == null || count > 0) unclassified++; continue; }
-      const modes = new Set([...(def.activityModeTypes || []), def.directActivityModeType]);
-      if (!modes.has(4) && !modes.has(82)) continue;
+      const type = endgameType(def);
+      if (!type) continue;
       if (count == null) { missingCounters++; continue; }
-      if (modes.has(4)) raid += count;
+      if (type === 'raid') raid += count;
       else dungeon += count;
       if (count <= 0) continue;
-      const type = modes.has(4) ? 'raid' : 'dungeon';
       const classType = valid(characters[index]?.classType);
       if ([0, 1, 2].includes(classType)) classes.set(classType, (classes.get(classType) || 0) + count);
       else unknownClasses++;
       // Images group normal/master/prestige hashes without counting variants as
       // different raids. Never fall back to the activity hash for breadth.
-      const name = def.originalDisplayProperties?.name || def.displayProperties?.name;
-      const key = def.pgcrImage || name?.trim().toLocaleLowerCase().replace(/\s*:\s*(normal|standard|master|prestige|legend|expert).*$/i, '');
+      const name = activityName(def);
+      const baseName = name?.toLowerCase().replace(/\s*:\s*(normal|standard|master|prestige|legend|expert)\b.*$/i, '');
+      const artwork = def.pgcrImage && !/\/(placeholder|missing_icon_d2)\.(jpe?g|png)$/i.test(def.pgcrImage) ? def.pgcrImage : null;
+      // The original Pantheon tiers are variants of the same raid gauntlet.
+      const legacyPantheon = /^the pantheon(?::|$)/i.test(name);
+      const key = legacyPantheon ? 'the pantheon' : artwork || baseName;
       if (!key) { unresolvedFamilies++; continue; }
       const familyKey = `${type}:${key}`;
-      const previous = families.get(familyKey) || { key: familyKey, type, name: name || 'Endgame activity', completions: 0 };
+      const previous = families.get(familyKey) || { key: familyKey, type, name: legacyPantheon ? 'The Pantheon' : name || 'Endgame activity', completions: 0 };
       previous.completions += count;
       families.set(familyKey, previous);
     }

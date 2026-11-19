@@ -1,4 +1,4 @@
-import { numeric, statValue, ratio, mergeActivities, CLASSES } from './reportData.js';
+import { numeric, statValue, ratio, mergeActivities, CLASSES, endgameType } from './reportData.js';
 
 export function competitiveActivity(activity) {
   const details = activity.activityDetails || {};
@@ -63,7 +63,7 @@ export function aggregateEntries(responses, characters, definitions) {
       const fastest = milliseconds == null ? statValue(activity.values, 'activityFastestCompletionSeconds') : milliseconds / 1000;
       rows.push({ hash, characterId: characters[i].characterId, characterName: CLASSES[characters[i].classType] || 'Guardian',
         name: definition?.displayProperties?.name || `Activity ${hash}`, description: definition?.displayProperties?.description || '',
-        category: modes.has(4) ? 'raid' : modes.has(82) ? 'dungeon' : modes.has(16) || modes.has(46) ? 'nightfall' : 'other',
+        category: endgameType(definition) || (modes.has(16) || modes.has(46) ? 'nightfall' : 'other'),
         completions: statValue(activity.values, 'activityCompletions'),
         fastest: fastest != null && fastest > 0 ? fastest : null,
         kills: statValue(activity.values, 'activityKills'), deaths: statValue(activity.values, 'activityDeaths'),

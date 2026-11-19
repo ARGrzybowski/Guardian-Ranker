@@ -66,3 +66,21 @@ test('compact family metadata preserves full browser breadth and class results',
   assert.equal(projected.endgameCoverage.raidBreadth,1);
   assert.deepEqual(projected.dimensions,browser.dimensions);
 });
+
+test('real catalog exceptions group Crota and Pantheon variants in both views', () => {
+  const definitions = {
+    1: { directActivityModeType: 82, displayProperties: { name: "Crota's End: Standard" }, pgcrImage: '/img/destiny_content/pgcr/raid_crotas_end.jpg' },
+    2: { directActivityModeType: 4, displayProperties: { name: "Crota's End" }, pgcrImage: '/img/destiny_content/pgcr/raid_crotas_end.jpg' },
+    3: { directActivityModeType: 4, displayProperties: { name: 'The Pantheon: Oryx Exalted' }, pgcrImage: '/oryx.jpg' },
+    4: { directActivityModeType: 4, displayProperties: { name: 'The Pantheon: Nezarec Sublime' }, pgcrImage: '/placeholder.jpg' },
+    5: { directActivityModeType: 4, displayProperties: { name: 'Another Raid' }, pgcrImage: '/placeholder.jpg' }
+  };
+  const input = { characters: [{ characterId: 'c', classType: 0 }],
+    aggregates: [{ activities: Object.keys(definitions).map(activityHash => ({ activityHash, values: stats({ activityCompletions: 5 }) })) }] };
+  const complete = calculateAccountRating({ ...input, activityDefinitions: definitions }).endgameCoverage;
+  const projected = calculateAccountRating({ ...input, activityDefinitions: compactActivities(definitions) }).endgameCoverage;
+  assert.deepEqual(projected, complete);
+  assert.equal(complete.raid, 25); assert.equal(complete.dungeon, 0);
+  assert.equal(complete.raidBreadth, 3); assert.equal(complete.raidDepth, 2);
+  assert.equal(complete.families.find(f => f.name === 'The Pantheon').completions, 10);
+});

@@ -1,5 +1,6 @@
 import { loadPlayerProfile } from '../bungieApi.js';
 import { calculateAccountRating, RATING_VERSION } from '../accountRating.js';
+import { endgameType } from '../reportData.js';
 import { BudgetReached } from './indexer.mjs';
 
 export function compactTitles(definitions) {
@@ -10,8 +11,8 @@ export function compactTitles(definitions) {
 }
 export function compactActivities(definitions) {
   return Object.fromEntries(Object.entries(definitions).flatMap(([hash, d]) => {
-    const modes = new Set([...(d.activityModeTypes || []), d.directActivityModeType]);
-    return !d.redacted && (modes.has(4) || modes.has(82)) ? [[hash, { directActivityModeType: modes.has(4) ? 4 : 82,
+    const type = endgameType(d);
+    return type ? [[hash, { directActivityModeType: type === 'raid' ? 4 : 82,
       pgcrImage: d.pgcrImage, displayProperties: { name: d.displayProperties?.name },
       originalDisplayProperties: { name: d.originalDisplayProperties?.name } }]] : [];
   }));
