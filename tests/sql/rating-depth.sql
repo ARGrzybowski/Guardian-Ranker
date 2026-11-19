@@ -2,7 +2,7 @@ begin;
 create or replace function pg_temp.assert_ratings(value boolean,message text) returns void language plpgsql as $$
 begin if value is distinct from true then raise exception 'Rating assertion: %',message; end if; end; $$;
 set role service_role;
-update public.guardian_index set profile_status='public',last_refreshed_at=now(),canonical_membership_id=null,bungie_name='Verified#1234' where membership_id='1';
+update public.guardian_index set membership_type=3,profile_status='public',last_refreshed_at=now(),canonical_membership_id=null,bungie_name='Verified#1234' where membership_id='1';
 insert into public.guardian_account_ratings(membership_id,score,grade,rating_version,coverage,provisional,last_rated_at,next_rating_at)
 values('1',917.9,'S+','GR-2.0',100,false,now(),now()+interval '1 hour');
 set role anon;
