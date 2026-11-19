@@ -4,6 +4,7 @@ import { CLASSES, PLATFORMS, ACTIVITY_MODES, REPORT_COMPONENTS, overviewStats, c
 import { searchExactName, loadPlayerProfile, formatBungieName } from './bungieApi.js';
 import { closestTriumphs, objectiveCompletion, activityInsights } from './reportInsights.js';
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
+import { renderAccountRating } from './ratingView.js';
 
 const number = (value, digits = 0) => numeric(value) == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const tile = (label, value) => `<div class="report-stat"><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`;
@@ -28,7 +29,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   const api = createReportApi(membership), manifest = createManifestClient();
   const generatedAt = new Date().toISOString();
   const exported = { schemaVersion: 1, bungieName, membership, generatedAt, profile: profileData, sections: {} };
-  const sections = { overview: 'Overview', characters: 'Characters & gear', career: 'PvP & PvE', activities: 'Activity history', endgame: 'Activity records', records: 'Triumphs & titles', collections: 'Collections', progression: 'Progression & metrics', compare: 'Compare players' };
+  const sections = { overview: 'Overview', rating: 'Account rating', characters: 'Characters & gear', career: 'PvP & PvE', activities: 'Activity history', endgame: 'Activity records', records: 'Triumphs & titles', collections: 'Collections', progression: 'Progression & metrics', compare: 'Compare players' };
   const nameUrl = new URL(window.location.href);
   nameUrl.search = new URLSearchParams({ name: bungieName }); nameUrl.hash = '';
   container.innerHTML = `
@@ -55,7 +56,13 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   commendationStats.className = 'report-stat';
   commendationStats.innerHTML = `<dt>Commendation score</dt><dd>${e(number(summary.commendationScore))}</dd>`;
   overview.querySelector('.report-stats').appendChild(commendationStats);
+  const ratingPreview = document.createElement('div');
+  ratingPreview.className = 'account-rating-preview';
+  ratingPreview.innerHTML = '<div><p class="eyebrow">ACCOUNT RATING</p><p class="rating-preview-value">Ten metric ratings · one overall account rating</p></div><button type="button">Calculate account rating</button>';
+  overview.querySelector('.report-stats').after(ratingPreview);
+  ratingPreview.querySelector('button').addEventListener('click', () => container.querySelector('.report-nav [data-section=rating]').click());
   container.querySelector('[data-action=share]').addEventListener('click', async () => {
+    nameUrl.hash = window.location.hash;
     try { await navigator.clipboard.writeText(nameUrl.href); shareStatus.textContent = 'Report link copied.'; }
     catch { shareStatus.textContent = `Report link: ${nameUrl.href}`; }
   });
@@ -77,9 +84,16 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     } finally { if (isCurrent()) target.removeAttribute('aria-busy'); }
   }
   const initialized = new Set(['overview']);
-  const loaders = { characters: loadCharacters, career: loadCareer, activities: loadActivities, endgame: () => renderActivityRecords(panel('endgame'), { api, characters, manifest, signal, onExport: data => { exported.sections.activityRecords = data; } }), records: () => loadCatalogue('records'), collections: () => loadCatalogue('collections'), progression: loadProgression, compare: loadComparison };
+  const loaders = { rating: () => renderAccountRating(panel('rating'), { profile, characters, api, manifest, signal, onResult: rating => {
+    exported.sections.accountRating = rating;
+    ratingPreview.querySelector('.rating-preview-value').textContent = rating.overall.score == null ? `Unrated · ${rating.overall.coverage}% coverage` : `${Math.floor(rating.overall.score)} / 1,000 · ${rating.overall.provisional ? 'Provisional' : rating.overall.tier.name}`;
+    ratingPreview.querySelector('button').textContent = 'View rating breakdown';
+  } }), characters: loadCharacters, career: loadCareer, activities: loadActivities, endgame: () => renderActivityRecords(panel('endgame'), { api, characters, manifest, signal, onExport: data => { exported.sections.activityRecords = data; } }), records: () => loadCatalogue('records'), collections: () => loadCatalogue('collections'), progression: loadProgression, compare: loadComparison };
   container.querySelectorAll('[data-section]').forEach(button => button.addEventListener('click', () => {
     const id = button.dataset.section;
+    const sectionUrl = new URL(window.location.href);
+    sectionUrl.hash = id;
+    history.replaceState(null, '', sectionUrl);
     for (const [key] of Object.entries(sections)) panel(key).hidden = key !== id;
     container.querySelectorAll('[data-section]').forEach(b => b.setAttribute('aria-pressed', String(b === button)));
     if (!initialized.has(id)) {
@@ -327,5 +341,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
       });
     });
   }
+  const linkedSection = window.location.hash.slice(1);
+  if (Object.hasOwn(sections, linkedSection)) container.querySelector(`.report-nav [data-section="${linkedSection}"]`)?.click();
   return container.querySelector('.queue-status');
 }

@@ -5,6 +5,7 @@ The report aims to expose a useful, inspectable account dossier from public Bung
 | Section | Available features |
 | --- | --- |
 | Overview | Current, renewed, and highest Guardian Rank; highest equipped power; lifetime/active Triumph score; surviving-character playtime; last played; collection counts; linked memberships and cross-save; clan identity, motto, membership size, founding date, and description |
+| Account rating | Ten weighted 0–100 metric ratings, a 0–1,000 overall rating, grades, evidence coverage, partial-data bounds, next milestones, and an inspectable versioned methodology; direct `#rating` links |
 | Characters & gear | Each character's power, race, equipped title, combat stats, equipped item names/types/power/damage, descriptions, equipped perks/mods, and detailed item stats on request |
 | PvP & PvE | Account-wide career kills/deaths/assists, K/D, efficiency, wins, activity counts, win rate, precision kills, streak, activity time, and available weapon kill breakdown; additional character/mode statistics |
 | Activity history | All-character or individual-character history; mode filters including raids, dungeons, Nightfalls, Trials and Gambit; older pages; deduplication; partial-page retry; loaded-history combat summary and daily/mode distribution; participant match reports, weapon breakdowns, and links to other Guardians |
@@ -26,6 +27,8 @@ The report aims to expose a useful, inspectable account dossier from public Bung
 Definition catalogues load from Bungie's manifest-provided static paths only when needed. Item definitions are resolved individually with bounded concurrency. No player scores are submitted by the report to the database. The existing identity-only enqueue RPC remains the only search write. New sections do not add background indexing workload or a local service.
 
 ## Analysis coverage
+
+The [account rating methodology](account-rating.md) defines every weight, curve, coverage rule, limitation and example. It is an editorial account-achievement model, not a calibrated population percentile or matchmaking skill rating. Ratings load their required sources independently of other tabs and are included in JSON export when calculated.
 
 [Aggregate activity statistics](https://bungie-net.github.io/multi/operation_get_Destiny2-GetDestinyAggregateActivityStats.html) come from surviving characters, with separate rows per character and activity variant. They are Bungie counters, not an independently verified full-clear history: checkpoints and character deletion affect coverage. Nonpositive/missing fastest times are unavailable. Missing character requests can be retried without losing successful results. Category filters use manifest activity mode types; unmapped activities remain under Other.
 

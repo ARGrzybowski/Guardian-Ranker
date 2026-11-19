@@ -89,7 +89,7 @@ try {
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
   let sequence = 0;
   const pending = new Map(), errors = [], apiCalls = [];
-  let historyFailure = false, aggregateFailure = false;
+  let historyFailure = false, aggregateFailure = false, ratingRetryFailure = false;
   function cdp(method, params = {}) {
     const id = ++sequence;
     return new Promise((resolve, reject) => {
@@ -143,7 +143,8 @@ try {
       } else if (url.includes('/GroupV2/User/')) body = json({ results: [{ group: { groupId: '1', name: '<script>Clan</script>', clanInfo: { clanCallsign: 'TEST' }, memberCount: 50, motto: 'A good clan', creationDate: '2020-01-01' } }] });
       else if (url.includes('/Stats/PostGameCarnageReport/')) body = json({ period: '2026-11-18', entries: [{ player: { destinyUserInfo: { bungieGlobalDisplayName: 'Teammate', bungieGlobalDisplayNameCode: 7 } }, values: basicStats({ kills: 12, deaths: 2, assists: 3, score: 100, team: 1 }), extended: { weapons: [{ referenceId: 901, values: basicStats({ uniqueWeaponKills: 12, uniqueWeaponPrecisionKills: 3 }) }] } }] });
       else if (url.includes('/Stats/AggregateActivityStats/')) {
-        if (url.includes('/Character/1/') && !aggregateFailure) { aggregateFailure = true; body = { ErrorCode: 99, Message: 'Aggregate temporarily unavailable' }; }
+        if (url.includes('/Account/retry/') && url.includes('/Character/1/') && !ratingRetryFailure) { ratingRetryFailure = true; body = { ErrorCode: 99, Message: 'Rating source temporarily unavailable' }; }
+        else if (url.includes('/Character/1/') && !aggregateFailure) { aggregateFailure = true; body = { ErrorCode: 99, Message: 'Aggregate temporarily unavailable' }; }
         else body = json({ activities: [{ activityHash: 904, values: basicStats({ activityCompletions: 7, fastestCompletionMsForActivity: 600000, activityKills: 350, activityDeaths: 7, activitySecondsPlayed: 7200 }) }, { activityHash: 907, values: basicStats({ activityCompletions: 2, fastestCompletionMsForActivity: 0 }) }] });
       }
       else if (url.includes('/Stats/Activities/')) {
@@ -260,6 +261,16 @@ try {
   await evaluate("{ const original = URL.createObjectURL.bind(URL); URL.createObjectURL = blob => { window.__lastDownloadText = blob.text(); return original(blob); }; HTMLAnchorElement.prototype.click = function() {}; document.querySelector('.aggregate-csv').click(); }");
   assert.ok((await evaluate('window.__lastDownloadText')).includes('Test Dungeon'));
   assert.ok(!(await evaluate('window.__lastDownloadText')).includes('Test Raid'));
+  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 10");
+  assert.ok(await evaluate("document.querySelector('.rating-coverage').textContent.includes('100%')"));
+  assert.ok(await evaluate("document.querySelector('#report-rating').textContent.includes('GR-1.0')"));
+  assert.equal(await evaluate('window.location.hash'), '#rating');
+  assert.equal(await evaluate("document.querySelectorAll('.rating-metric meter').length"), 10);
+  assert.ok(await evaluate("document.querySelector('.rating-methodology').textContent.includes('Weights total 100%')"));
+  await mkdir(join(root, 'test-artifacts'), { recursive: true });
+  await evaluate("document.querySelector('#report-rating').scrollIntoView({block:'start'})");
+  const desktopRating = await cdp('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(root, 'test-artifacts', 'account-rating.png'), Buffer.from(desktopRating.data, 'base64'));
   await openSection('records', "document.querySelector('.catalogue-count')?.textContent.includes('31 matching')");
   assert.equal(await evaluate("document.querySelectorAll('#report-records .catalogue-item').length"), 24);
   assert.equal(await evaluate("document.querySelector('#report-records').textContent.includes('SECRET SOLUTION')"), false);
@@ -288,11 +299,24 @@ try {
   assert.equal(exported.sections.activityRecords.rows.length, 6);
   assert.equal(exported.sections.activityRecords.coverage.charactersLoaded, 3);
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
+  assert.equal(exported.sections.accountRating.version, 'GR-1.0');
+  assert.equal(exported.sections.accountRating.overall.coverage, 100);
+  assert.equal(exported.sections.accountRating.overall.provisional, false);
   await evaluate("document.querySelector('[data-section=overview]').click()");
   await evaluate('window.scrollTo(0, 0)');
   const reportDesktop = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   await mkdir(join(root, 'test-artifacts'), { recursive: true });
   await writeFile(join(root, 'test-artifacts', 'player-report.png'), Buffer.from(reportDesktop.data, 'base64'));
+  await search('Retry#1234');
+  await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Retry#1234'");
+  await openSection('rating', "document.querySelector('.rating-retry') != null");
+  assert.ok(await evaluate("document.querySelector('.rating-coverage').textContent.includes('75%')"));
+  assert.ok(await evaluate("document.querySelector('.rating-tier').textContent.includes('no overall grade')"));
+  const retryCareerCalls = apiCalls.filter(url => url.includes('/Account/retry/Stats/')).length;
+  await evaluate("document.querySelector('.rating-retry').click()");
+  await waitFor("document.querySelector('.rating-coverage').textContent.includes('100%')");
+  assert.equal(apiCalls.filter(url => url.includes('/Account/retry/Stats/')).length, retryCareerCalls, 'Rating retry retains successful career inputs');
+  assert.ok(await evaluate("!document.querySelector('.rating-tier').textContent.includes('no overall grade')"));
   await search('<img src=x onerror=window.__injected=true>#1234');
   await waitFor("document.querySelector('#results .bungie-name')?.textContent.includes('<img')");
   assert.equal(await evaluate('Boolean(window.__injected)'), false, 'Display names cannot inject HTML');
@@ -334,6 +358,13 @@ try {
   await evaluate("document.querySelector('#report-endgame').scrollIntoView({block:'start'})");
   const mobileRecords = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'activity-records-mobile.png'), Buffer.from(mobileRecords.data, 'base64'));
+  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 10");
+  await evaluate("document.querySelector('#report-rating').scrollIntoView({block:'start'})");
+  const mobileRating = await cdp('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(artifactDir, 'account-rating-mobile.png'), Buffer.from(mobileRating.data, 'base64'));
+  await cdp('Page.navigate', { url: `${origin}/?name=Hawk%237753#rating` });
+  await waitFor("document.querySelectorAll('.rating-metric').length === 10 && document.querySelector('.rating-coverage').textContent.includes('100%')");
+  assert.equal(await evaluate("document.querySelector('#report-rating').hidden"), false, 'Shared rating links open and calculate the correct section');
   await cdp('Emulation.clearDeviceMetricsOverride');
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html` });
   await waitFor("document.querySelectorAll('#highest-character-body tr a').length === 5");
@@ -350,7 +381,7 @@ try {
   assert.match(await evaluate("document.getElementById('index-status').textContent"), /not enabled yet/);
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');
-  console.log('PASS: player reports, gear stats/perks, activity records and partial retries, history insights, match weapons, closest triumphs, commendations, filtered CSV/JSON, comparison, mobile, privacy/injection, stale searches, and leaderboards.');
+  console.log('PASS: account-rating metrics/coverage/retries/exports/deep links, public player reports, activity insights, gear, mobile, privacy/injection, stale searches, and leaderboards.');
 } finally {
   socket?.close();
   browser.kill();

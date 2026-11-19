@@ -12,7 +12,8 @@
 ## Features
 
 - **Player Stat Search:** Find and view detailed stats for any Destiny 2 player.
-- **Player dossier:** Nine sections covering account overview, characters and equipped gear/perks/stats, career PvP/PvE statistics, mode-specific statistics, paginated activity history and match reports, aggregate activity records, searchable triumphs/titles, collections, reputation/metrics/commendations, and player comparison.
+- **Player dossier:** Ten sections covering account overview/rating, characters and equipped gear/perks/stats, career PvP/PvE statistics, mode-specific statistics, paginated activity history and match reports, aggregate activity records, searchable triumphs/titles, collections, reputation/metrics/commendations, and player comparison.
+- **Account rating:** Versioned 0–100 scores for ten metrics, a weighted 0–1,000 overall rating, grades, contribution breakdowns, next milestones, and explicit partial/private-data coverage. [Full scoring methodology](docs/account-rating.md).
 - **Deeper analysis:** Raid/dungeon activity counters and fastest completions, loaded-history K/D and daily/mode summaries, match weapon breakdowns, closest incomplete triumphs, collectible acquisition sources, and filtered activity-record CSV export.
 - **Share and export:** Stable player links, printable loaded sections, and JSON export of the public profile and loaded report data.
 - **Leaderboards:** Rank Bungie-verified profiles across power, Triumph score, time played, and Guardian Rank. Automatic clan discovery and refresh run in Supabase's cloud.
