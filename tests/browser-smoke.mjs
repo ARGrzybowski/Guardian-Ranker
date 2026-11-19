@@ -89,7 +89,7 @@ try {
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
   let sequence = 0;
   const pending = new Map(), errors = [], apiCalls = [];
-  let historyFailure = false;
+  let historyFailure = false, aggregateFailure = false;
   function cdp(method, params = {}) {
     const id = ++sequence;
     return new Promise((resolve, reject) => {
@@ -134,20 +134,25 @@ try {
           profileRecords: { data: { lifetimeScore: 10000 } },
           profileCollectibles: { data: { collectibles: { 1: { state: 0 }, 2: { state: 1 } } } },
           characterEquipment: { data: { 0: { items: [{ itemHash: 901, itemInstanceId: '10001' }] } } },
-          itemComponents: { instances: { data: { 10001: { primaryStat: { value: 402 }, damageType: 3 } } }, sockets: { data: { 10001: { sockets: [{ plugHash: 902, isEnabled: true }] } } } },
+          itemComponents: { instances: { data: { 10001: { primaryStat: { value: 402 }, damageType: 3 } } }, sockets: { data: { 10001: { sockets: [{ plugHash: 902, isEnabled: true }] } } }, stats: { data: { 10001: { stats: { 905: { value: 78 } } } } } },
           characterProgressions: { data: { 0: { progressions: { 903: { level: 10, progressToNextLevel: 20, nextLevelAt: 100, currentResetCount: 2 } } } } },
-          metrics: { data: { metrics: { 1: { objectiveProgress: { progress: 42 } } } } }
+          metrics: { data: { metrics: { 1: { objectiveProgress: { progress: 42 } } } } },
+          profileCommendations: { data: { totalScore: 1234, commendationNodeScoresByHash: { 906: 100 }, commendationNodePercentagesByHash: { 906: 25 } } }
         });
-        body.Response.profileRecords.data.records = Object.fromEntries(Array.from({ length: 31 }, (_, i) => [i + 1, { state: i === 0 ? 65 : i === 30 ? 12 : i % 2 ? 4 : 1 }]));
+        body.Response.profileRecords.data.records = Object.fromEntries(Array.from({ length: 31 }, (_, i) => [i + 1, { state: i === 0 ? 65 : i === 30 ? 12 : i % 2 ? 4 : 1, objectives: [{ progress: i + 1, completionValue: 40 }] }]));
       } else if (url.includes('/GroupV2/User/')) body = json({ results: [{ group: { groupId: '1', name: '<script>Clan</script>', clanInfo: { clanCallsign: 'TEST' }, memberCount: 50, motto: 'A good clan', creationDate: '2020-01-01' } }] });
-      else if (url.includes('/Stats/PostGameCarnageReport/')) body = json({ period: '2026-11-18', entries: [{ player: { destinyUserInfo: { bungieGlobalDisplayName: 'Teammate', bungieGlobalDisplayNameCode: 7 } }, values: basicStats({ kills: 12, deaths: 2, assists: 3, score: 100, team: 1 }) }] });
+      else if (url.includes('/Stats/PostGameCarnageReport/')) body = json({ period: '2026-11-18', entries: [{ player: { destinyUserInfo: { bungieGlobalDisplayName: 'Teammate', bungieGlobalDisplayNameCode: 7 } }, values: basicStats({ kills: 12, deaths: 2, assists: 3, score: 100, team: 1 }), extended: { weapons: [{ referenceId: 901, values: basicStats({ uniqueWeaponKills: 12, uniqueWeaponPrecisionKills: 3 }) }] } }] });
+      else if (url.includes('/Stats/AggregateActivityStats/')) {
+        if (url.includes('/Character/1/') && !aggregateFailure) { aggregateFailure = true; body = { ErrorCode: 99, Message: 'Aggregate temporarily unavailable' }; }
+        else body = json({ activities: [{ activityHash: 904, values: basicStats({ activityCompletions: 7, fastestCompletionMsForActivity: 600000, activityKills: 350, activityDeaths: 7, activitySecondsPlayed: 7200 }) }, { activityHash: 907, values: basicStats({ activityCompletions: 2, fastestCompletionMsForActivity: 0 }) }] });
+      }
       else if (url.includes('/Stats/Activities/')) {
         const page = Number(new URL(url).searchParams.get('page'));
         if (page === 1 && url.includes('/Character/1/') && !historyFailure) { historyFailure = true; body = { ErrorCode: 99, Message: 'History temporarily unavailable' }; }
         else body = json({ activities: Array.from({ length: page === 0 ? 25 : page === 1 ? 1 : 0 }, (_, i) => ({ period: '2026-11-18', activityDetails: { instanceId: String(page * 25 + i + 1), referenceId: 904, mode: 4 }, values: basicStats({ completed: 1, kills: 50, deaths: 2, activityDurationSeconds: 600 }) })) });
       } else if (url.includes('/Stats/')) body = url.includes('/Character/') ? json({ raid: { allTime: basicStats({ kills: 100, deaths: 10, activitiesEntered: 20, activitiesWon: 15 }) } }) : json({ mergedAllCharacters: { results: { allPvP: { allTime: basicStats({ kills: 200, deaths: 100, assists: 50, activitiesEntered: 100, activitiesWon: 60, secondsPlayed: 7200 }) }, allPvE: { allTime: basicStats({ kills: 1000, deaths: 10, activitiesEntered: 50, activitiesWon: 45 }) } } } });
-      else if (/\/Manifest\/Destiny\w+Definition\/\d+\//.test(url)) body = json({ displayProperties: { name: url.includes('/901/') ? 'Test Rifle' : url.includes('/902/') ? 'Test Perk' : url.includes('/903/') ? 'Vanguard Reputation' : 'Test Raid', description: 'Public definition', icon: '/icon.png' }, inventory: { tierType: 6 }, itemTypeDisplayName: 'Scout Rifle' });
-      else if (url.includes('/Manifest/')) body = json({ jsonWorldComponentContentPaths: { en: { DestinySeasonDefinition: '/seasons.json', DestinyRecordDefinition: '/records.json', DestinyCollectibleDefinition: '/collectibles.json', DestinyMetricDefinition: '/metrics.json', DestinyProgressionDefinition: '/progressions.json' } } });
+      else if (/\/Manifest\/Destiny\w+Definition\/\d+\//.test(url)) body = json({ displayProperties: { name: url.includes('/901/') ? 'Test Rifle' : url.includes('/902/') ? 'Test Perk' : url.includes('/903/') ? 'Vanguard Reputation' : url.includes('/905/') ? 'Handling' : url.includes('/906/') ? 'Ally' : 'Test Raid', description: 'Public definition', icon: '/icon.png' }, inventory: { tierType: 6 }, itemTypeDisplayName: 'Scout Rifle' });
+      else if (url.includes('/Manifest/')) body = json({ jsonWorldComponentContentPaths: { en: { DestinySeasonDefinition: '/seasons.json', DestinyRecordDefinition: '/records.json', DestinyCollectibleDefinition: '/collectibles.json', DestinyMetricDefinition: '/metrics.json', DestinyProgressionDefinition: '/progressions.json', DestinyActivityDefinition: '/activities.json' } } });
       else if (url.includes('/Settings/')) body = json({ destiny2CoreSettings: { currentSeasonHash: 1 } });
       else throw new Error(`Unexpected API request: ${url}`);
     } else if (url.endsWith('/seasons.json')) body = { 1: { displayProperties: { name: 'Test Season' }, seasonNumber: 1 } };
@@ -155,6 +160,7 @@ try {
     else if (url.endsWith('/collectibles.json')) body = collectibleDefinitions;
     else if (url.endsWith('/metrics.json')) body = { 1: { displayProperties: { name: 'Raid completions' } } };
     else if (url.endsWith('/progressions.json')) body = { 903: { displayProperties: { name: 'Vanguard Reputation' } } };
+    else if (url.endsWith('/activities.json')) body = { 904: { displayProperties: { name: 'Test Raid' }, activityModeTypes: [4] }, 907: { displayProperties: { name: 'Test Dungeon' }, directActivityModeType: 82 } };
     if (body !== undefined) {
       await cdp('Fetch.fulfillRequest', { requestId: event.requestId, responseCode: 200,
         responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'Access-Control-Allow-Origin', value: '*' }],
@@ -215,7 +221,7 @@ try {
   assert.equal(await evaluate('window.__intervals.size'), 1, 'Only one weekly-reset timer remains active');
   await waitFor("document.querySelector('.clan-summary').textContent.includes('<script>Clan</script>')");
   assert.equal(await evaluate("document.querySelector('.clan-summary script')"), null);
-  assert.ok(apiCalls.some(url => url.includes('components=100,104,200,202,204,205,300,304,305,800,900,1100')));
+  assert.ok(apiCalls.some(url => url.includes('components=100,104,200,202,204,205,300,304,305,800,900,1100,1400')));
   async function openSection(id, condition) {
     await evaluate(`document.querySelector('[data-section="${id}"]').click()`);
     await waitFor(condition);
@@ -225,10 +231,14 @@ try {
   await openSection('characters', "document.querySelector('#report-characters').textContent.includes('Test Rifle')");
   await evaluate("document.querySelector('.gear-perks').click()");
   await waitFor("document.querySelector('.perk-list').textContent.includes('Test Perk')");
+  await evaluate("document.querySelector('.gear-stats').click()");
+  await waitFor("document.querySelector('.item-stats')?.textContent.includes('Handling')");
+  assert.ok(await evaluate("document.querySelector('.item-stats').textContent.includes('78')"));
   await openSection('career', "document.querySelector('#report-career').textContent.includes('60%')");
   await evaluate("document.querySelector('.load-mode').click()");
   await waitFor("document.querySelector('.mode-result').textContent.includes('15')");
   await openSection('activities', "document.querySelectorAll('.match-open').length === 25");
+  assert.ok(await evaluate("document.querySelector('.activity-insights').textContent.includes('25 unique loaded activities')"));
   await evaluate("document.querySelector('.history-more').click()");
   await waitFor("document.querySelector('.history-more').textContent === 'Retry incomplete page' && !document.querySelector('.history-more').disabled");
   assert.equal(await evaluate("document.querySelectorAll('.match-open').length"), 26);
@@ -238,16 +248,32 @@ try {
   assert.ok(apiCalls.filter(url => url.includes('/Character/1/Stats/Activities/') && url.includes('page=1')).length >= 2);
   await evaluate("document.querySelector('.match-open').click()");
   await waitFor("document.querySelector('.match-result').textContent.includes('Teammate#0007')");
+  await waitFor("document.querySelector('.weapon-result')?.textContent.includes('Test Rifle')");
+  assert.ok(await evaluate("document.querySelector('.weapon-result').textContent.includes('25%')"));
+  await openSection('endgame', "document.querySelector('.aggregate-retry') != null");
+  assert.ok(await evaluate("document.querySelector('.record-coverage').textContent.includes('2 / 3')"));
+  await evaluate("document.querySelector('.aggregate-retry').click()");
+  await waitFor("document.querySelector('.record-coverage').textContent.includes('3 / 3')");
+  await evaluate("document.querySelector('.aggregate-category').value='dungeon'; document.querySelector('.aggregate-category').dispatchEvent(new Event('change'))");
+  assert.equal(await evaluate("document.querySelectorAll('.aggregate-result tbody tr').length"), 3);
+  assert.ok(await evaluate("document.querySelector('.aggregate-result').textContent.includes('Unavailable')"), 'Missing fastest time is not a zero-second completion');
+  await evaluate("{ const original = URL.createObjectURL.bind(URL); URL.createObjectURL = blob => { window.__lastDownloadText = blob.text(); return original(blob); }; HTMLAnchorElement.prototype.click = function() {}; document.querySelector('.aggregate-csv').click(); }");
+  assert.ok((await evaluate('window.__lastDownloadText')).includes('Test Dungeon'));
+  assert.ok(!(await evaluate('window.__lastDownloadText')).includes('Test Raid'));
   await openSection('records', "document.querySelector('.catalogue-count')?.textContent.includes('31 matching')");
   assert.equal(await evaluate("document.querySelectorAll('#report-records .catalogue-item').length"), 24);
   assert.equal(await evaluate("document.querySelector('#report-records').textContent.includes('SECRET SOLUTION')"), false);
   await evaluate("document.querySelector('#report-records .catalogue-filter').value='titles'; document.querySelector('#report-records .catalogue-filter').dispatchEvent(new Event('change'))");
   assert.equal(await evaluate("document.querySelectorAll('#report-records .catalogue-item').length"), 1);
   assert.ok(await evaluate("document.querySelector('#report-records').textContent.includes('Wayfarer')"));
+  await evaluate("document.querySelector('.catalogue-sort').value='closest'; document.querySelector('.catalogue-sort').dispatchEvent(new Event('change'))");
+  assert.equal(await evaluate("document.querySelector('#report-records .catalogue-item h4').textContent"), 'Triumph 30');
+  assert.ok(await evaluate("document.querySelector('#report-records .catalogue-item').textContent.includes('75%')"));
   await openSection('collections', "document.querySelector('#report-collections').textContent.includes('Missing Ship')");
   await evaluate("document.querySelector('#report-collections input').value='exotic'; document.querySelector('#report-collections input').dispatchEvent(new Event('input'))");
   assert.equal(await evaluate("document.querySelectorAll('#report-collections .catalogue-item').length"), 1);
   await openSection('progression', "document.querySelector('#report-progression').textContent.includes('Vanguard Reputation')");
+  await waitFor("document.querySelector('#report-progression').textContent.includes('Ally')");
   await evaluate("document.querySelector('.load-metrics').click()");
   await waitFor("document.querySelector('.metric-rows')?.textContent.includes('Raid completions')");
   await openSection('compare', "document.querySelector('.compare-form') != null");
@@ -258,6 +284,9 @@ try {
   const exported = JSON.parse(await evaluate('window.__exportText'));
   assert.equal(exported.bungieName, 'Hawk#7753');
   assert.equal(exported.sections.activities.activities.length, 26);
+  assert.equal(exported.sections.activities.insights.kd, 25);
+  assert.equal(exported.sections.activityRecords.rows.length, 6);
+  assert.equal(exported.sections.activityRecords.coverage.charactersLoaded, 3);
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
   await evaluate("document.querySelector('[data-section=overview]').click()");
   await evaluate('window.scrollTo(0, 0)');
@@ -301,6 +330,10 @@ try {
   await openSection('activities', "document.querySelectorAll('.match-open').length === 25");
   await openSection('characters', "document.querySelector('#report-characters').textContent.includes('Test Rifle')");
   await openSection('records', "document.querySelector('#report-records .catalogue-count')?.textContent.includes('31 matching')");
+  await openSection('endgame', "document.querySelector('.record-coverage')?.textContent.includes('3 / 3')");
+  await evaluate("document.querySelector('#report-endgame').scrollIntoView({block:'start'})");
+  const mobileRecords = await cdp('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(artifactDir, 'activity-records-mobile.png'), Buffer.from(mobileRecords.data, 'base64'));
   await cdp('Emulation.clearDeviceMetricsOverride');
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html` });
   await waitFor("document.querySelectorAll('#highest-character-body tr a').length === 5");
@@ -317,7 +350,7 @@ try {
   assert.match(await evaluate("document.getElementById('index-status').textContent"), /not enabled yet/);
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');
-  console.log('PASS: comprehensive report sections, equipment/perks, career/mode stats, history pagination/retries/deduplication, match reports, triumph/title/collection search, metrics/export, mobile, privacy/injection, stale searches, and leaderboards.');
+  console.log('PASS: player reports, gear stats/perks, activity records and partial retries, history insights, match weapons, closest triumphs, commendations, filtered CSV/JSON, comparison, mobile, privacy/injection, stale searches, and leaderboards.');
 } finally {
   socket?.close();
   browser.kill();

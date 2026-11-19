@@ -1,6 +1,6 @@
 import { bungieRequest } from './bungieApi.js';
 
-export const REPORT_COMPONENTS = '100,104,200,202,204,205,300,304,305,800,900,1100';
+export const REPORT_COMPONENTS = '100,104,200,202,204,205,300,304,305,800,900,1100,1400';
 export const CLASSES = ['Titan', 'Hunter', 'Warlock'];
 export const PLATFORMS = { 1: 'Xbox', 2: 'PlayStation', 3: 'Steam', 4: 'Blizzard', 5: 'Stadia', 6: 'Epic Games', 10: 'Demon' };
 export const ACTIVITY_MODES = { 0: 'All activities', 2: 'Story', 3: 'Strikes', 4: 'Raids', 5: 'Crucible', 16: 'Nightfalls', 63: 'Gambit', 82: 'Dungeons', 84: 'Trials of Osiris' };
@@ -34,6 +34,7 @@ export function overviewStats(profile) {
     rank: profile.profile?.data?.currentGuardianRank ?? null,
     highestRank: profile.profile?.data?.lifetimeHighestGuardianRank ?? null,
     renewedRank: profile.profile?.data?.renewedGuardianRank ?? null,
+    commendationScore: profile.profileCommendations?.data?.totalScore ?? null,
     collectionTotal: collections.length,
     collectionAcquired: collections.filter(c => c.acquired).length,
     hasCollections: profile.profileCollectibles?.data != null || Object.values(profile.characterCollectibles?.data || {}).some(c => c.collectibles != null)
@@ -74,7 +75,7 @@ export function catalogueEntries(profile, type, definitions) {
 }
 export function filterCatalogue(entries, query = '', filter = 'all', type = 'records') {
   const search = query.trim().toLocaleLowerCase();
-  return entries.filter(e => (!search || `${e.name} ${e.description}`.toLocaleLowerCase().includes(search)) &&
+  return entries.filter(e => (!search || `${e.name} ${e.description} ${type === 'collections' ? e.definition?.sourceString || '' : ''}`.toLocaleLowerCase().includes(search)) &&
     (filter === 'all' || (filter === 'complete' && (type === 'records' ? e.complete : e.acquired)) ||
       (filter === 'incomplete' && !(type === 'records' ? e.complete : e.acquired)) || (filter === 'titles' && e.titleUnlocked)))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -98,6 +99,9 @@ export function createReportApi(membership, request = bungieRequest) {
   return {
     async career(signal) { return (await request(`/Destiny2/${type}/Account/${id}/Stats/?groups=1,2,3`, { signal })).Response; },
     async clan(signal) { return (await request(`/GroupV2/User/${type}/${id}/0/1/`, { signal })).Response; },
+    async aggregates(characterId, signal) {
+      return (await request(`/Destiny2/${type}/Account/${id}/Character/${encodeURIComponent(characterId)}/Stats/AggregateActivityStats/`, { signal })).Response;
+    },
     async history(characterId, mode, page, signal) {
       return (await request(`/Destiny2/${type}/Account/${id}/Character/${encodeURIComponent(characterId)}/Stats/Activities/?count=25&mode=${Number(mode) || 0}&page=${Number(page) || 0}`, { signal })).Response;
     },

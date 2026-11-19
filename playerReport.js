@@ -2,6 +2,8 @@ import { escapeHtml as e } from './html.js';
 import { bungieImage, createManifestClient, mapConcurrent } from './manifest.js';
 import { CLASSES, PLATFORMS, ACTIVITY_MODES, REPORT_COMPONENTS, overviewStats, characterSummary, dateText, numeric, statValue, careerGroups, summarizeCareer, catalogueEntries, filterCatalogue, mergeActivities, createReportApi } from './reportData.js';
 import { searchExactName, loadPlayerProfile, formatBungieName } from './bungieApi.js';
+import { closestTriumphs, objectiveCompletion, activityInsights } from './reportInsights.js';
+import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 
 const number = (value, digits = 0) => numeric(value) == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const tile = (label, value) => `<div class="report-stat"><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`;
@@ -26,7 +28,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   const api = createReportApi(membership), manifest = createManifestClient();
   const generatedAt = new Date().toISOString();
   const exported = { schemaVersion: 1, bungieName, membership, generatedAt, profile: profileData, sections: {} };
-  const sections = { overview: 'Overview', characters: 'Characters & gear', career: 'PvP & PvE', activities: 'Activity history', records: 'Triumphs & titles', collections: 'Collections', progression: 'Progression & metrics', compare: 'Compare players' };
+  const sections = { overview: 'Overview', characters: 'Characters & gear', career: 'PvP & PvE', activities: 'Activity history', endgame: 'Activity records', records: 'Triumphs & titles', collections: 'Collections', progression: 'Progression & metrics', compare: 'Compare players' };
   const nameUrl = new URL(window.location.href);
   nameUrl.search = new URLSearchParams({ name: bungieName }); nameUrl.hash = '';
   container.innerHTML = `
@@ -49,6 +51,10 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     <details class="report-details"><summary>Account identity & linked platforms</summary><p>Destiny membership ID: <code>${e(membership.membershipId)}</code></p><ul>${(user.destinyMemberships || []).map(m => `<li>${e(PLATFORMS[m.membershipType] || 'Other')} · ${e(m.displayName || bungieName)} ${m.crossSaveOverride && m.crossSaveOverride !== m.membershipType ? '(cross-save overridden)' : ''}</li>`).join('')}</ul><a href="https://www.bungie.net/7/en/User/Profile/${encodeURIComponent(membership.membershipType)}/${encodeURIComponent(membership.membershipId)}" target="_blank" rel="noopener noreferrer">View Bungie profile ↗</a></details>`;
 
   const shareStatus = container.querySelector('.share-status');
+  const commendationStats = document.createElement('div');
+  commendationStats.className = 'report-stat';
+  commendationStats.innerHTML = `<dt>Commendation score</dt><dd>${e(number(summary.commendationScore))}</dd>`;
+  overview.querySelector('.report-stats').appendChild(commendationStats);
   container.querySelector('[data-action=share]').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(nameUrl.href); shareStatus.textContent = 'Report link copied.'; }
     catch { shareStatus.textContent = `Report link: ${nameUrl.href}`; }
@@ -71,7 +77,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     } finally { if (isCurrent()) target.removeAttribute('aria-busy'); }
   }
   const initialized = new Set(['overview']);
-  const loaders = { characters: loadCharacters, career: loadCareer, activities: loadActivities, records: () => loadCatalogue('records'), collections: () => loadCatalogue('collections'), progression: loadProgression, compare: loadComparison };
+  const loaders = { characters: loadCharacters, career: loadCareer, activities: loadActivities, endgame: () => renderActivityRecords(panel('endgame'), { api, characters, manifest, signal, onExport: data => { exported.sections.activityRecords = data; } }), records: () => loadCatalogue('records'), collections: () => loadCatalogue('collections'), progression: loadProgression, compare: loadComparison };
   container.querySelectorAll('[data-section]').forEach(button => button.addEventListener('click', () => {
     const id = button.dataset.section;
     for (const [key] of Object.entries(sections)) panel(key).hidden = key !== id;
@@ -110,6 +116,20 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
       return `<article class="character-detail"><h3>${e(CLASSES[c.classType] || 'Guardian')} · ${e(number(c.light))} Power</h3>${titleName ? `<p class="title-name">${e(titleName)}</p>` : ''}<p class="report-note">${e(['Human', 'Awoken', 'Exo'][c.raceType] || 'Unknown race')} · Last played ${e(dateText(c.dateLastPlayed, true))} · ${e(number(Number(c.minutesPlayedTotal || 0) / 60))} hours</p><dl class="report-stats compact">${stats.join('')}</dl><h4>Equipped loadout</h4>${equipment ? `<div class="gear-grid">${gear.join('')}</div>` : note('Equipment is unavailable in this public profile.')}</article>`;
     }, signal, 1);
     signal.throwIfAborted(); target.innerHTML = `<h3>Characters & equipped loadouts</h3>${note('A snapshot of currently equipped items. Saved loadouts and private inventory require account authorization.')}${cards.join('')}`;
+    // Item stats are already in the public profile. Resolve their labels only
+    // when requested, independently of the equipment/perk view.
+    const equipmentItems = characters.flatMap(c => profile.characterEquipment?.data?.[c.characterId]?.items || []);
+    target.querySelectorAll('.gear-item').forEach((card, index) => {
+      const instanceId = equipmentItems[index]?.itemInstanceId;
+      if (!instanceId) return;
+      const button = document.createElement('button'), statsTarget = document.createElement('div');
+      button.type = 'button'; button.className = 'gear-stats'; button.textContent = 'View detailed item stats';
+      card.lastElementChild.append(button, statsTarget);
+      button.addEventListener('click', () => {
+        button.hidden = true;
+        void withState(statsTarget, async () => { statsTarget.innerHTML = await gearStatsHtml(instanceId, profile, manifest, signal); });
+      }, { once: true });
+    });
     target.querySelectorAll('.gear-perks').forEach(button => button.addEventListener('click', () => {
       const perkTarget = button.nextElementSibling;
       button.hidden = true;
@@ -173,7 +193,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
         const definitions = new Map();
         await mapConcurrent([...new Set(activities.map(a => a.activityDetails?.referenceId).filter(Boolean))], async hash => definitions.set(hash, await safeDefinition('DestinyActivityDefinition', hash)), signal, 3);
         signal.throwIfAborted(); if (version !== historyVersion) return;
-        exported.sections.activities = { filters: selected, pagesLoaded: page + 1, partial: failed.length > 0, activities };
+        exported.sections.activities = { filters: selected, pagesLoaded: page + 1, partial: failed.length > 0, activities, insights: activityInsights(activities) };
         result.innerHTML = `${failed.length ? note(`Some history could not load (${failed.join(', ')}). Retry this page before loading older activities.`) : ''}${note(`${activities.length} unique activities loaded · ${page + 1} page(s)`)}${activities.length ? `<div class="report-table-wrap"><table class="report-table"><caption class="sr-only">Loaded activities</caption><thead><tr><th>Activity</th><th>Date</th><th>Result</th><th>Kills</th><th>Deaths</th><th>Duration</th><th>Details</th></tr></thead><tbody>${activities.map(a => {
           const def = definitions.get(a.activityDetails?.referenceId), values = a.values;
           const standing = statValue(values, 'standing'), completed = statValue(values, 'completed');
@@ -181,6 +201,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
           const outcome = competitive && standing === 0 ? 'Victory' : competitive && standing === 1 ? 'Defeat' : completed === 1 ? 'Completed' : completed === 0 ? 'Incomplete' : 'Unavailable';
           return `<tr><td><strong>${e(def?.displayProperties?.name || ACTIVITY_MODES[a.activityDetails?.mode] || 'Activity')}</strong>${a.activityDetails?.isPrivate ? '<span class="report-note"> · Private match</span>' : ''}</td><td>${e(dateText(a.period, true))}</td><td>${outcome}</td><td>${e(number(statValue(values, 'kills')))}</td><td>${e(number(statValue(values, 'deaths')))}</td><td>${e(number((statValue(values, 'activityDurationSeconds') ?? statValue(values, 'timePlayedSeconds')) == null ? null : (statValue(values, 'activityDurationSeconds') ?? statValue(values, 'timePlayedSeconds')) / 60, 1))} min</td><td><button type="button" class="match-open" data-id="${e(a.activityDetails.instanceId)}">Match report</button></td></tr>`;
         }).join('')}</tbody></table></div>` : note('No public activities found. Activity history may be private or this filter may have no results.')}`;
+        result.insertAdjacentHTML('afterbegin', activityInsightsHtml(activities));
         // Never skip a failed character's page. Successful rows are deduplicated on retry.
         if (!failed.length) page++;
         more.hidden = !failed.length && characters.filter(c => selected.character === 'all' || selected.character === c.characterId).every(c => exhausted.has(c.characterId));
@@ -204,6 +225,9 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
           const name = info.bungieGlobalDisplayName ? `${info.bungieGlobalDisplayName}#${String(info.bungieGlobalDisplayNameCode ?? 0).padStart(4, '0')}` : info.displayName || 'Unknown Guardian';
           return `<tr><td><a href="?${new URLSearchParams({ name }).toString()}">${e(name)}</a></td><td>${e(number(statValue(entry.values, 'team')))}</td><td>${e(number(statValue(entry.values, 'kills')))}</td><td>${e(number(statValue(entry.values, 'deaths')))}</td><td>${e(number(statValue(entry.values, 'assists')))}</td><td>${e(number(statValue(entry.values, 'score')))}</td></tr>`;
         }).join('')}</tbody></table></div>`;
+        const weapons = document.createElement('div');
+        weapons.className = 'match-weapons'; detail.appendChild(weapons);
+        mountMatchWeapons(weapons, data, { manifest, signal, isCurrent: () => version === matchVersion });
         detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, () => version === matchVersion);
     }
@@ -218,18 +242,25 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     target.innerHTML = `<h3>${records ? 'Triumphs & unlocked titles' : 'Collections'}</h3>${note(records ? 'Completion and redemption are separate. Secret triumph descriptions remain hidden. Titles are listed when Bungie marks them equippable.' : 'Includes visible profile and character collectibles, deduplicated across characters. The denominator is the exposed catalogue, not every item ever released.')}<div class="report-filters"><label>Search ${records ? 'triumphs' : 'collections'}<input class="catalogue-search" type="search" placeholder="Name or description"></label><label>Show<select class="catalogue-filter"><option value="all">All</option><option value="complete">${records ? 'Completed' : 'Acquired'}</option><option value="incomplete">${records ? 'Incomplete' : 'Missing'}</option>${records ? '<option value="titles">Unlocked titles</option>' : ''}</select></label></div><p class="catalogue-count report-note" aria-live="polite"></p><div class="catalogue-grid"></div><button type="button" class="catalogue-more">Show more</button>`;
     let limit = 24;
     function draw() {
-      const filtered = filterCatalogue(entries, target.querySelector('input').value, target.querySelector('select').value, type);
+      let filtered = filterCatalogue(entries, target.querySelector('input').value, target.querySelector('.catalogue-filter').value, type);
+      if (target.querySelector('.catalogue-sort')?.value === 'closest') filtered = closestTriumphs(filtered);
       target.querySelector('.catalogue-count').textContent = `${filtered.length.toLocaleString()} matching · ${Math.min(limit, filtered.length).toLocaleString()} shown`;
       target.querySelector('.catalogue-grid').innerHTML = filtered.slice(0, limit).map(entry => {
         const complete = records ? entry.complete : entry.acquired;
-        const progress = entry.objectives || entry.intervalObjectives || [];
+        const progress = entry.objectives?.length ? entry.objectives : entry.intervalObjectives || [];
         const title = entry.definition?.titleInfo?.titlesByGender?.Male || entry.definition?.titleInfo?.titlesByGender?.Female;
-        return `<article class="catalogue-item">${entry.obscured ? '' : image(entry.definition?.displayProperties?.icon, '', 'item-icon')}<div><h4>${e(entry.name)}</h4><span class="report-badge ${complete ? 'complete' : ''}">${records ? entry.redeemed ? 'Redeemed' : complete ? 'Complete · unclaimed' : 'In progress' : complete ? 'Acquired' : 'Missing'}</span>${entry.titleUnlocked && title ? `<p class="title-name">Title: ${e(title)}</p>` : ''}<p>${e(entry.description)}</p>${records && !entry.obscured ? progress.map(o => `<p class="report-note">${e(number(o.progress))} / ${e(number(o.completionValue))}${o.complete ? ' · Complete' : ''}</p>`).join('') : ''}</div></article>`;
+        const completion = !entry.obscured ? objectiveCompletion(entry) : null;
+        const extra = `${records && completion != null && !entry.complete ? `<p class="report-note">Objective progress: ${e(number(completion, 1))}% (average across objectives)</p>` : ''}${!records && entry.definition?.sourceString ? `<p class="report-note">Source: ${e(entry.definition.sourceString)}</p>` : ''}${records && entry.completedCount != null ? `<p class="report-note">Times completed: ${e(number(entry.completedCount))}</p>` : ''}`;
+        return `<article class="catalogue-item">${entry.obscured ? '' : image(entry.definition?.displayProperties?.icon, '', 'item-icon')}<div><h4>${e(entry.name)}</h4><span class="report-badge ${complete ? 'complete' : ''}">${records ? entry.redeemed ? 'Redeemed' : complete ? 'Complete · unclaimed' : 'In progress' : complete ? 'Acquired' : 'Missing'}</span>${entry.titleUnlocked && title ? `<p class="title-name">Title: ${e(title)}</p>` : ''}<p>${e(entry.description)}</p>${extra}${records && !entry.obscured ? progress.map(o => `<p class="report-note">${e(number(o.progress))} / ${e(number(o.completionValue))}${o.complete ? ' · Complete' : ''}</p>`).join('') : ''}</div></article>`;
       }).join('') || note('No matching public entries. This component may be private or unavailable.');
       target.querySelector('.catalogue-more').hidden = limit >= filtered.length;
     }
+    if (records) {
+      target.querySelector('.report-filters').insertAdjacentHTML('beforeend', '<label>Order<select class="catalogue-sort"><option value="name">Name</option><option value="closest">Closest incomplete triumphs</option></select></label>');
+      target.querySelector('.catalogue-sort').addEventListener('change', () => { if (target.querySelector('.catalogue-sort').value === 'closest') target.querySelector('.catalogue-filter').value = 'incomplete'; limit = 24; draw(); });
+    }
     target.querySelector('input').addEventListener('input', () => { limit = 24; draw(); });
-    target.querySelector('select').addEventListener('change', () => { limit = 24; draw(); });
+    target.querySelector('.catalogue-filter').addEventListener('change', () => { if (records) target.querySelector('.catalogue-sort').value = 'name'; limit = 24; draw(); });
     target.querySelector('.catalogue-more').addEventListener('click', () => { limit += 24; draw(); });
     draw();
   }
@@ -247,6 +278,9 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
       return `<h4>${e(CLASSES[c.classType] || 'Guardian')}</h4>${rows.length ? `<div class="report-table-wrap"><table class="report-table"><thead><tr><th>Progression</th><th>Level</th><th>Progress to next level</th><th>Resets</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>` : note('Public progression is unavailable for this character.')}`;
     }, signal, 1);
     signal.throwIfAborted(); target.innerHTML = `<h3>Reputation & progression</h3>${note('Levels and resets are Bungie progression counters. Their meaning varies by activity and season.')}${sections.join('')}<h3>Tracked metrics</h3><div class="metrics-result">${note('Load named metrics such as activity counters and personal records.')}<button type="button" class="load-metrics">Load metrics</button></div>`;
+    const commendations = document.createElement('div');
+    target.querySelector('.metrics-result').previousElementSibling.before(commendations);
+    void withState(commendations, async () => { commendations.innerHTML = `<h3>Commendations</h3>${await commendationsHtml(profile, manifest, signal)}`; });
     target.querySelector('.load-metrics').addEventListener('click', () => {
       const result = target.querySelector('.metrics-result');
       void withState(result, async () => {
@@ -281,7 +315,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
           const other = await loadPlayerProfile(otherUser, signal, undefined, REPORT_COMPONENTS);
           signal.throwIfAborted();
           const otherName = formatBungieName(otherUser), stats = overviewStats(other.profileData.Response);
-          const metrics = { rank: 'Guardian Rank', highestRank: 'Highest Guardian Rank', power: 'Highest equipped power', hours: 'Character time (hours)', triumphScore: 'Lifetime Triumph score', activeScore: 'Active Triumph score', collectionAcquired: 'Collections acquired' };
+          const metrics = { rank: 'Guardian Rank', highestRank: 'Highest Guardian Rank', power: 'Highest equipped power', hours: 'Character time (hours)', triumphScore: 'Lifetime Triumph score', activeScore: 'Active Triumph score', collectionAcquired: 'Collections acquired', commendationScore: 'Commendation score' };
           exported.sections.comparison = { name: otherName, membership: other.membership, summary: stats, comparedAt: new Date().toISOString() };
           result.innerHTML = `<div class="report-table-wrap"><table class="report-table"><caption>Public profile comparison</caption><thead><tr><th>Measurement</th><th>${e(bungieName)}</th><th>${e(otherName)}</th><th>Difference (first − second)</th></tr></thead><tbody>${Object.entries(metrics).map(([key, label]) => {
             const left = key === 'collectionAcquired' && !summary.hasCollections ? null : summary[key];
