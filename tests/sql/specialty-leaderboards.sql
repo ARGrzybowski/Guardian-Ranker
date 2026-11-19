@@ -69,7 +69,7 @@ select pg_temp.assert_board(
   (public.get_guardian_specialty_board('clear.'||md5('raidClears:vault of glass'))->>'total')::int=30,
   'named clear boards populate from revised activity breakdowns');
 select pg_temp.assert_board(
-  (public.get_guardian_specialty_board('solo.'||md5('prophecy'))#>>'{rows,0,score}')::int=2,
+  (public.get_guardian_specialty_board('solo.'||md5('prophecy'))#>>'{rows,0,score}')::numeric=2,
   'named solo leaderboard preserves the stronger tier');
 
 reset role;
