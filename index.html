@@ -8,103 +8,70 @@
 </head>
 <!-- I love Urvi -->
 <body>
-  <div class="main-container">
-    <h1>Guardian Ranker</h1>
-    <p class="site-intro">Your complete public Destiny 2 player dossier. Search a Guardian to explore their career, gear, triumphs, and activities.</p>
-
-    <div class="search-container">
-      <input type="text" id="nameInput" placeholder="Guardian#1234" autocomplete="off" aria-label="Bungie name" />
-      <button id="searchBtn" title="Search" aria-label="Search guardians">➤</button>
+  <main class="main-container">
+    <header class="site-heading">
+      <h1>Guardian Ranker</h1>
+      <p class="site-intro">Search for a Destiny 2 Guardian to see their rating, gear, and activity history.</p>
+    </header>
+    <div class="search-layout">
+      <div class="search-container">
+        <input type="text" id="nameInput" placeholder="Guardian#1234" autocomplete="off" aria-label="Bungie name" />
+        <button id="searchBtn" type="button">Search</button>
+      </div>
+      <ul id="suggestions"></ul>
     </div>
-
-    <ul id="suggestions"></ul>
 
     <div class="results-container">
-      <!-- Left Side: Player Card -->
       <div id="results" class="user-card player-report">
-        <div class="report-empty"><p class="eyebrow">KNOW YOUR GUARDIAN</p><h2>A career worth exploring.</h2><p>Enter a full Bungie name, such as Hawk#7753, to open a detailed report.</p><p class="report-note">Character loadouts · PvP & PvE · Match history · Triumphs & titles · Collections · Clan & progression</p></div>
+        <div class="report-empty"><p>Enter a full Bungie name, such as Hawk#7753, to open a player report.</p></div>
       </div>
 
-      <!-- Middle: Leaderboards -->
-      <div class="user-card" style="flex: 0 0 auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h2>Leaderboard</h2>
-          <a href="leaderboards.html#discover" id="viewAllLeaderboardBtn"
-             style="padding: 6px 12px; font-size: 14px; border: none; border-radius: 6px; background: #007bff; color: white; text-decoration: none; cursor: pointer;">
-             Explore leaderboards
-          </a>
-        </div>
-        <p id="index-status" role="status" class="index-status">Checking leaderboard coverage...</p>
-        <h3>Guardian Performance</h3>
-        <p id="rating-index-status" class="index-status">Checking cloud rating coverage...</p>
-        <table class="styled-table"><thead><tr><th>Rank</th><th>Bungie Name</th><th>Points</th><th>Percentile</th></tr></thead><tbody id="account-rating-body"></tbody></table>
-        <button id="toggleAccountRatingBtn">Show More</button>
-        <h3>Highest Character</h3>
-        <table id="highest-character" class="styled-table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Bungie Name</th>
-              <th>Class</th>
-              <th>Power Level</th>
-            </tr>
-          </thead>
-          <tbody id="highest-character-body">
-            <!-- Rows injected by highestCharacter.js -->
-          </tbody>
-        </table>
-        <button id="toggleHighestCharacterBtn" style="margin-top: 10px;">Show More</button>
-        <h3>Knowledge</h3>
-        <p class="index-status">Lifetime Rank 7+ and 10,000+ Triumph points.</p>
-        <table id="leaderboard" class="styled-table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Bungie Name</th>
-              <th>Triumph Score</th>
-              <th>Percentile</th>
-            </tr>
-          </thead>
-          <tbody id="leaderboard-body">
-            <!-- Leaderboard rows injected by leaderboard.js -->
-          </tbody>
-        </table>
-        <button id="toggleLeaderboardBtn" style="margin-top: 10px;">Show More</button>
-        <h3>Commendations</h3>
-        <p class="index-status">Lifetime Rank 7+ and 500+ commendation score.</p>
-        <table class="styled-table"><thead><tr><th>Rank</th><th>Bungie Name</th><th>Commendations</th><th>Percentile</th></tr></thead><tbody id="commendation-body"></tbody></table>
-        <button id="toggleCommendationsBtn">Show More</button>
-        <h3>Time Played</h3>
-        <table id="time-played" class="styled-table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Bungie Name</th>
-              <th>Time Played</th>
-            </tr>
-          </thead>
-          <tbody id="time-played-body">
-            <!-- Rows injected by leaderboard.js -->
-          </tbody>
-        </table>
-        <button id="toggleTimePlayedBtn" style="margin-top: 10px;">Show More</button>
-      </div>
-
-
-      <!-- Right Side: Global Game Stats Card -->
-      <div id="game-stats" class="user-card" style="flex: 0 0 300px;">
+      <aside id="game-stats" class="user-card" aria-labelledby="game-stats-title">
         <div class="user-header">
-          <div class="user-info">
-            <h2 class="bungie-name">Global Game Stats</h2>
-          </div>
+          <div class="user-info"><h2 id="game-stats-title" class="bungie-name">Global Game Stats</h2></div>
         </div>
-        <div class="stats-container">
-          <!-- Season info here by JS -->
-        </div>
-    </div>
-  </div>
+        <div class="stats-container"></div>
+      </aside>
 
-  </div>
+      <section class="home-leaderboards" aria-labelledby="home-leaderboards-title">
+        <header class="featured-heading">
+          <h2 id="home-leaderboards-title">Featured leaderboards</h2>
+          <a href="leaderboards.html#discover" id="viewAllLeaderboardBtn" class="site-button">Explore leaderboards</a>
+        </header>
+        <p id="index-status" role="status" class="index-status">Checking leaderboard coverage...</p>
+        <div class="leaderboards-container">
+          <section class="leaderboard-section">
+            <h3>Guardian Performance</h3>
+            <p id="rating-index-status" class="index-status">Checking cloud rating coverage...</p>
+            <table class="styled-table"><thead><tr><th>Rank</th><th>Bungie name</th><th>Points</th><th>Percentile</th></tr></thead><tbody id="account-rating-body"></tbody></table>
+            <button type="button" id="toggleAccountRatingBtn">Show More</button>
+          </section>
+          <section class="leaderboard-section">
+            <h3>Highest Character</h3>
+            <table id="highest-character" class="styled-table"><thead><tr><th>Rank</th><th>Bungie name</th><th>Class</th><th>Power</th></tr></thead><tbody id="highest-character-body"></tbody></table>
+            <button type="button" id="toggleHighestCharacterBtn">Show More</button>
+          </section>
+          <section class="leaderboard-section">
+            <h3>Knowledge</h3>
+            <p class="index-status">Lifetime Rank 7+ and 10,000+ Triumph points.</p>
+            <table id="leaderboard" class="styled-table"><thead><tr><th>Rank</th><th>Bungie name</th><th>Triumphs</th><th>Percentile</th></tr></thead><tbody id="leaderboard-body"></tbody></table>
+            <button type="button" id="toggleLeaderboardBtn">Show More</button>
+          </section>
+          <section class="leaderboard-section">
+            <h3>Commendations</h3>
+            <p class="index-status">Lifetime Rank 7+ and 500+ commendation score.</p>
+            <table class="styled-table"><thead><tr><th>Rank</th><th>Bungie name</th><th>Score</th><th>Percentile</th></tr></thead><tbody id="commendation-body"></tbody></table>
+            <button type="button" id="toggleCommendationsBtn">Show More</button>
+          </section>
+          <section class="leaderboard-section">
+            <h3>Time Played</h3>
+            <table id="time-played" class="styled-table"><thead><tr><th>Rank</th><th>Bungie name</th><th>Time played</th></tr></thead><tbody id="time-played-body"></tbody></table>
+            <button type="button" id="toggleTimePlayedBtn">Show More</button>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="global.js"></script>

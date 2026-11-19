@@ -11,8 +11,9 @@ import { PERFORMANCE_METRICS, PERFORMANCE_VERSION } from '../performanceRating.j
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const longGuardian = 'GuardianWithoutSpaces'.repeat(3) + '#1234';
 const fixtureRows = Array.from({ length: 8 }, (_, i) => ({
-  membership_id: String(i), bungie_name: i === 7 ? 'Hawk#7753' : `Player${i}#1234`,
+  membership_id: String(i), bungie_name: i === 0 ? longGuardian : i === 7 ? 'Hawk#7753' : `Player${i}#1234`,
   triumph_score: 1000 - i, guardian_rank: 11 - i, time_played_hours: 200 - i,
   class_type: 'Titan', light_level: 400 - i, points: 900-i, standing: i+1, percentile: 99-i, cohort_size: 50, commendations: 800-i
 }));
@@ -30,7 +31,7 @@ const specialtyCatalog = [
   { board_id: 'solo.test', category: 'Dungeons', title: 'Test dungeon · Solo', unit: 'solo', description: 'Best verified solo tier.' }
 ];
 const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
-  membership_id: String(i), bungie_name: i === 27 ? 'FarGuardian#1234' : `Board Guardian ${i}#1234`, score: 300 - i, standing: i + 1
+  membership_id: String(i), bungie_name: i === 27 ? 'FarGuardian#1234' : fixtureRows[i]?.bungie_name ?? `Board Guardian ${i}#1234`, score: 300 - i, standing: i + 1
 }));
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
 recordDefinitions[31] = { displayProperties: { name: 'SECRET SPOILER', description: 'SECRET SOLUTION' }, stateInfo: { obscuredDescription: 'Keep playing to reveal.' } };
@@ -252,7 +253,12 @@ try {
   };
   await cdp('Runtime.enable');
   await cdp('Page.enable');
-  await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  let viewportWidth;
+  async function resize(width, height, mobile = false) {
+    viewportWidth = width;
+    await cdp('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
+  }
+  await resize(1440, 1000);
   await cdp('Page.addScriptToEvaluateOnNewDocument', { source: `
     window.__intervals = new Set();
     const startInterval = window.setInterval, stopInterval = window.clearInterval;
@@ -275,8 +281,30 @@ try {
   async function search(name) {
     await evaluate(`document.getElementById('nameInput').value = ${JSON.stringify(name)}; document.getElementById('searchBtn').click()`);
   }
+  async function assertLayout(label) {
+    const { width, pageOverflow, overflowing } = await evaluate(`(() => {
+      const root = document.documentElement;
+      const containers = document.querySelectorAll('#results, .report-header, .report-actions, .report-filters, .report-table-wrap--responsive, .search-layout, .leaderboard-section, .board-directory, .board-table-wrap');
+      return {
+        width: window.innerWidth, pageOverflow: root.scrollWidth - root.clientWidth,
+        overflowing: [...containers].filter(el => el.getClientRects().length && el.scrollWidth > el.clientWidth + 1)
+          .map(el => el.id || el.className)
+      };
+    })()`);
+    assert.ok(width <= viewportWidth + 1 && pageOverflow <= 1,
+      `${label} at ${viewportWidth}px: layout width ${width}px, page overflow ${pageOverflow}px`);
+    assert.deepEqual(overflowing, [], `${label} at ${viewportWidth}px: overflowing containers`);
+    const splitHeaders = await evaluate(`[...document.querySelectorAll('.styled-table th')].filter(header => {
+      if (!/^\\S+$/.test(header.textContent.trim()) || !header.getClientRects().length) return false;
+      const text = new Range();
+      text.selectNodeContents(header);
+      return text.getClientRects().length > 1;
+    }).map(header => ({ text: header.textContent, width: header.clientWidth, font: getComputedStyle(header).fontSize }))`);
+    assert.deepEqual(splitHeaders, [], `${label} at ${viewportWidth}px: split leaderboard headers`);
+  }
   await cdp('Page.navigate', { url: origin });
   await waitFor("document.querySelector('#leaderboard-body tr a') && document.getElementById('nameInput')");
+  await assertLayout('Home');
   await search('Hawk#7753');
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753' && window.__writes.length === 1");
   assert.deepEqual(await evaluate('window.__writes[0]'), { name: 'enqueue_guardian', args: { p_membership_id: 'hawk', p_membership_type: 1 } });
@@ -295,12 +323,18 @@ try {
   await waitFor("document.querySelector('.eververse-items tbody')?.textContent.includes('<script>Test Shader</script>')");
   assert.equal(await evaluate("document.querySelector('.eververse-items tbody script')"), null);
   assert.equal(await evaluate("document.querySelectorAll('.eververse-items tbody tr').length"), 2);
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'table-row');
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
   async function openSection(id, condition) {
-    await evaluate(`document.querySelector('[data-section="${id}"]').click()`);
+    await evaluate(`{
+      const picker = document.querySelector('.report-section-picker select');
+      if (picker.getClientRects().length) {
+        picker.value = ${JSON.stringify(id)};
+        picker.dispatchEvent(new Event('change', { bubbles: true }));
+      } else document.querySelector('[data-section="${id}"]').click();
+    }`);
     await waitFor(condition);
-    const overflow = await evaluate('document.documentElement.scrollWidth - window.innerWidth');
-    assert.ok(overflow <= 1, `${id} overflow: ${overflow}px`);
+    await assertLayout(id);
   }
   await openSection('characters', "document.querySelector('#report-characters').textContent.includes('Test Rifle')");
   await evaluate("document.querySelector('.gear-perks').click()");
@@ -437,19 +471,22 @@ try {
   assert.equal(await evaluate("document.querySelector('#suggestions button').textContent"), 'Haw#7753');
   await evaluate("document.getElementById('nameInput').value='Hawk#7753'; document.getElementById('nameInput').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',bubbles:true}))");
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753'");
-  await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await resize(390, 844, true);
   await evaluate("document.querySelector('#suggestions').classList.remove('show')");
+  await openSection('overview', "document.querySelector('.eververse-value')?.textContent === '300 Bright Dust'");
   await evaluate('window.scrollTo(0, 0)');
-  const overflow = await evaluate('document.documentElement.scrollWidth - window.innerWidth');
-  assert.ok(overflow <= 1, `Mobile horizontal overflow: ${overflow}px`);
+  assert.ok(await evaluate(`Math.abs(document.querySelector('#nameInput').getBoundingClientRect().top -
+    document.querySelector('#searchBtn').getBoundingClientRect().top) <= 1`), 'The search button stays beside the field on phones');
+  assert.ok(await evaluate("document.querySelector('.report-section-picker select').getClientRects().length && !document.querySelector('.report-tabs').getClientRects().length"));
   const artifactDir = join(root, 'test-artifacts');
   await mkdir(artifactDir, { recursive: true });
   const mobile = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'mobile.png'), Buffer.from(mobile.data, 'base64'));
   await waitFor("document.querySelector('.eververse-value')?.textContent === '300 Bright Dust'");
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click(); document.querySelector('.eververse-items summary').click()");
-  await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 2");
-  assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Eververse breakdown fits on mobile');
+  await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 2 && document.querySelector('.eververse-items .report-cell-label').getClientRects().length");
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'grid');
+  await assertLayout('Eververse breakdown');
   await openSection('activities', "document.querySelectorAll('.match-open').length === 25");
   await openSection('characters', "document.querySelector('#report-characters').textContent.includes('Test Rifle')");
   await openSection('records', "document.querySelector('#report-records .catalogue-count')?.textContent.includes('31 matching')");
@@ -464,13 +501,19 @@ try {
   await cdp('Page.navigate', { url: `${origin}/?name=Hawk%237753#rating` });
   await waitFor("document.querySelectorAll('.rating-metric').length === 11 && document.querySelector('.rating-tier').textContent.includes('82%')");
   assert.equal(await evaluate("document.querySelector('#report-rating').hidden"), false, 'Shared rating links open and calculate the correct section');
-  await cdp('Page.navigate', { url: `${origin}/?name=Hawk%237753&compare=Partial%231234#compare` });
+  assert.equal(await evaluate("document.querySelector('.report-section-picker select').value"), 'rating');
+  await resize(320, 780, true);
+  const comparisonQuery = new URLSearchParams({ name: longGuardian, compare: 'Partial#1234' });
+  await cdp('Page.navigate', { url: `${origin}/?${comparisonQuery}#compare` });
   await waitFor("document.querySelector('.comparison-ratings')?.textContent.includes('Partial#1234') && document.querySelector('.comparison-status').textContent === 'Comparison ready.'");
-  assert.equal(await evaluate("document.querySelector('.comparison-ratings tbody tr td:last-child').textContent"), '—', 'A provisional score cannot determine an overall lead');
-  assert.ok(await evaluate("!document.querySelector('#report-compare').hidden && document.documentElement.scrollWidth <= window.innerWidth"), 'Shared comparison loads without page overflow on mobile');
-  await cdp('Emulation.clearDeviceMetricsOverride');
+  assert.equal(await evaluate("document.querySelector('.comparison-ratings tbody tr td:last-child .report-cell-value').textContent"), '—', 'A provisional score cannot determine an overall lead');
+  await assertLayout('Shared comparison with a long player name');
+  await resize(768, 1024);
+  await assertLayout('Tablet comparison');
+  await resize(1440, 1000);
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html` });
   await waitFor("document.querySelectorAll('#board-rows tr').length === 25");
+  await assertLayout('Leaderboard directory');
   assert.equal(await evaluate("window.__boardCalls.length"), 1, 'The directory loads only the selected board');
   await evaluate("document.querySelector('#board-player').value='farguardian#1234'; document.querySelector('.board-find').requestSubmit()");
   await waitFor("document.querySelector('#board-match').textContent.includes('Rank #28')");
@@ -497,11 +540,14 @@ try {
   await evaluate("window.__indexMissing = true; import('./leaderboard.js').then(module => module.loadLeaderboards())");
   assert.match(await evaluate("document.getElementById('index-status').textContent"), /not enabled yet/);
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
-  await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await resize(320, 780, true);
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html?board=contest.123#discover` });
   await waitFor("document.querySelector('#board-rows')?.textContent.includes('Verified clear')");
   assert.equal(await evaluate("document.querySelector('#board-choice').value"), 'contest.123');
-  assert.ok(await evaluate("document.querySelector('#discover').scrollWidth <= document.querySelector('#discover').clientWidth"), 'Leaderboard directory fits on mobile');
+  await waitFor("document.querySelector('#account-rating-body a')");
+  await assertLayout('Leaderboards with a long player name');
+  const narrowBoards = await cdp('Page.captureScreenshot', { format: 'png' });
+  await writeFile(join(artifactDir, 'leaderboards-mobile.png'), Buffer.from(narrowBoards.data, 'base64'));
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');
   console.log('PASS: account-rating metrics/coverage/retries/exports/deep links, public player reports, activity insights, gear, mobile, privacy/injection, stale searches, and leaderboards.');
 } finally {
