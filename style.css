@@ -418,6 +418,42 @@ ul#suggestions li:hover {
   flex: 1 1 350px; /* grow/shrink, minimum width */
   max-width: 400px;
 }
+.board-directory {
+  margin: 20px auto 28px;
+  max-width: 920px;
+  padding: clamp(14px, 3vw, 24px);
+  box-sizing: border-box;
+  background: #202431;
+  border: 1px solid #4c596a;
+  border-radius: 10px;
+  color: #eff4f9;
+}
+.board-directory-controls, .board-find {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.board-directory [hidden] { display: none; }
+.board-directory label { display: grid; gap: 6px; min-width: 0; font-size: .9rem; }
+.board-directory input, .board-directory select, .board-directory button {
+  min-width: 0;
+  padding: 9px 11px;
+  box-sizing: border-box;
+  font: inherit;
+  color: #eff4f9;
+  background: #283747;
+  border: 1px solid #718096;
+  border-radius: 6px;
+}
+.board-directory button { cursor: pointer; }
+.board-directory button:disabled { opacity: .55; cursor: default; }
+.board-directory :focus-visible { outline: 2px solid #a9efce; outline-offset: 3px; }
+.board-directory-note { color: #c4cede; font-size: .9rem; overflow-wrap: anywhere; }
+#board-match:empty { display: none; }
+.board-directory a { color: #a9efce; overflow-wrap: anywhere; }
+.board-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.board-table-wrap { overflow-x: auto; }
 .highlight {
   background-color: rgb(213, 122, 255) !important;
   font-weight: bold;

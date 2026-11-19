@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>All Leaderboards</title>
+  <title>Leaderboards · Guardian Ranker</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -11,7 +11,35 @@
   <a href="index.html" class="back-link">← Back</a>
   <h1>Guardian Ranker</h1>
 </div>
-<p>Search for a Guardian across all leaderboards</p>
+    <section class="board-directory" id="discover" aria-labelledby="discover-title">
+      <h2 id="discover-title">Explore leaderboards</h2>
+      <div class="board-directory-controls" hidden>
+        <label>Category <select id="board-category"><option value="">All categories</option></select></label>
+        <label>Filter boards <input id="board-filter" type="search" placeholder="Raid, dungeon, Trials…" autocomplete="off" /></label>
+        <label>Leaderboard <select id="board-choice"></select></label>
+      </div>
+      <p id="board-directory-status" class="board-directory-note" role="status">Loading leaderboards…</p>
+      <div class="board-directory-results" hidden>
+        <h3 id="board-title"></h3>
+        <p id="board-description" class="board-directory-note"></p>
+        <form class="board-find">
+          <label>Find a Guardian on this board <input id="board-player" type="text" placeholder="Guardian#1234" maxlength="100" autocomplete="off" required /></label>
+          <button type="submit">Find player</button>
+        </form>
+        <p id="board-match" class="board-directory-note" aria-live="polite"></p>
+        <div class="board-table-wrap"><table class="styled-table" aria-labelledby="board-title">
+          <thead><tr><th scope="col">Rank</th><th scope="col">Bungie name</th><th id="board-unit" scope="col">Score</th></tr></thead>
+          <tbody id="board-rows"></tbody>
+        </table></div>
+        <div class="board-pagination">
+          <button id="board-previous" type="button">Previous</button>
+          <p id="board-page-status" class="board-directory-note" role="status"></p>
+          <button id="board-retry" type="button" hidden>Retry standings</button>
+          <button id="board-next" type="button">Next</button>
+        </div>
+      </div>
+    </section>
+<p>Find a Guardian in the featured leaderboards</p>
 
 
     <!-- Search Bar -->
@@ -24,7 +52,7 @@
     <ul id="suggestions"></ul>
 
     <!-- Leaderboards -->
-    <h1 style="margin-top: 30px;">All Guardian Leaderboards</h1>
+    <h2>Featured leaderboards</h2>
     <p id="index-status" role="status" class="index-status">Checking leaderboard coverage...</p>
 
     <div class="leaderboards-container">
@@ -110,6 +138,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="leaderboard.js"></script>
   <script type="module" src="leaderboardSearch.js"></script>
+  <script type="module" src="leaderboardDirectory.js"></script>
 
 </body>
 </html>

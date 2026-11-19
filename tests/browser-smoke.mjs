@@ -22,17 +22,37 @@ const performanceRow = (contest, percentile) => ({
   metrics: PERFORMANCE_METRICS.map(metric => ({ ...metric, points: metric.id === 'raidContest' ? contest * 250 : 0, value: metric.id === 'raidContest' ? contest : 0 }))
 });
 const basicStats = values => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { basic: { value } }]));
+const specialtyCatalog = [
+  { board_id: 'raid.points', category: 'Raids', title: 'Raid performance', unit: 'points', description: 'Clear credit and contest points.' },
+  { board_id: 'contest.123', category: 'Raids', title: 'Test raid · Contest', unit: 'proof', description: 'Verified contest clears.' },
+  { board_id: 'solo.test', category: 'Dungeons', title: 'Test dungeon · Solo', unit: 'solo', description: 'Best verified solo tier.' }
+];
+const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
+  membership_id: String(i), bungie_name: i === 27 ? 'FarGuardian#1234' : `Board Guardian ${i}#1234`, score: 300 - i, standing: i + 1
+}));
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
 recordDefinitions[31] = { displayProperties: { name: 'SECRET SPOILER', description: 'SECRET SOLUTION' }, stateInfo: { obscuredDescription: 'Keep playing to reveal.' } };
 const collectibleDefinitions = { 1: { displayProperties: { name: 'Test Exotic', description: 'An acquired item' } }, 2: { displayProperties: { name: 'Missing Ship', description: 'Not yet acquired' } } };
 const databaseScript = `
 window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
 window.__standingRetry = true;
+window.__boardCalls = [];
 window.__performanceRows = ${JSON.stringify({ hawk: performanceRow(1, 82), rival: performanceRow(2, 94), retry: performanceRow(1, 82), partial: { ...performanceRow(0, null), points: null, eligible: false, standing: null } })};
 window.supabase = { createClient: () => ({
-  rpc: async (name, args) => {
+  rpc: (name, args) => {
+    if (name === 'get_guardian_specialty_board') {
+      window.__boardCalls.push(args);
+      const raw = ${JSON.stringify(specialtyRows)};
+      const list = args.p_board.startsWith('contest.') ? [{ ...raw[0], score: 1 }] :
+        args.p_board.startsWith('solo.') ? [{ ...raw[0], score: 2 }] : raw;
+      return { abortSignal: async () => ({ data: {
+        total: list.length,
+        rows: list.slice(args.p_offset, args.p_offset + args.p_limit),
+        match: list.find(row => row.bungie_name.toLowerCase() === args.p_guardian?.toLowerCase()) || null
+      }, error: null }) };
+    }
     window.__writes.push({ name, args });
-    return { data: true, error: window.__dbFail ? { message: 'Offline' } : null };
+    return Promise.resolve({ data: true, error: window.__dbFail ? { message: 'Offline' } : null });
   },
   from: table => ({
   select: () => {
@@ -50,7 +70,7 @@ window.supabase = { createClient: () => ({
         return { data: sample, error };
       },
       single: async () => ({ data: { indexed_count: 8, tracked_count: 10, fresh_24h_count: 7, due_count: 3, rating_indexed_count: 8, rating_due_count: 2, last_refreshed_at: '2026-11-18T12:00:00Z' }, error }),
-      range: async (start, end) => ({ data: window.__rows.slice(start, end + 1), error }) };
+      range: async (start, end) => ({ data: (table === 'guardian_specialty_catalog' ? ${JSON.stringify(specialtyCatalog)} : window.__rows).slice(start, end + 1), error }) };
     return query;
   }
 }) }) };`;
@@ -398,6 +418,16 @@ try {
   assert.ok(await evaluate("!document.querySelector('#report-compare').hidden && document.documentElement.scrollWidth <= window.innerWidth"), 'Shared comparison loads without page overflow on mobile');
   await cdp('Emulation.clearDeviceMetricsOverride');
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html` });
+  await waitFor("document.querySelectorAll('#board-rows tr').length === 25");
+  assert.equal(await evaluate("window.__boardCalls.length"), 1, 'The directory loads only the selected board');
+  await evaluate("document.querySelector('#board-player').value='farguardian#1234'; document.querySelector('.board-find').requestSubmit()");
+  await waitFor("document.querySelector('#board-match').textContent.includes('Rank #28')");
+  await evaluate("document.querySelector('#board-next').click()");
+  await waitFor("document.querySelectorAll('#board-rows tr').length === 3");
+  assert.equal(await evaluate("window.__boardCalls.at(-1).p_offset"), 25);
+  await evaluate("document.querySelector('#board-category').value='Dungeons'; document.querySelector('#board-category').dispatchEvent(new Event('change'))");
+  await waitFor("document.querySelector('#board-rows').textContent.includes('Solo flawless')");
+  assert.equal(await evaluate("new URL(location.href).searchParams.get('board')"), 'solo.test');
   await waitFor("document.querySelectorAll('#highest-character-body tr a').length === 5");
   await waitFor("document.querySelectorAll('#account-rating-body tr a').length === 5");
   assert.ok(await evaluate("document.querySelector('#account-rating-body a').href.endsWith('#rating')"));
@@ -415,6 +445,11 @@ try {
   await evaluate("window.__indexMissing = true; import('./leaderboard.js').then(module => module.loadLeaderboards())");
   assert.match(await evaluate("document.getElementById('index-status').textContent"), /not enabled yet/);
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await cdp('Page.navigate', { url: `${origin}/leaderboards.html?board=contest.123#discover` });
+  await waitFor("document.querySelector('#board-rows')?.textContent.includes('Verified clear')");
+  assert.equal(await evaluate("document.querySelector('#board-choice').value"), 'contest.123');
+  assert.ok(await evaluate("document.querySelector('#discover').scrollWidth <= document.querySelector('#discover').clientWidth"), 'Leaderboard directory fits on mobile');
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');
   console.log('PASS: account-rating metrics/coverage/retries/exports/deep links, public player reports, activity insights, gear, mobile, privacy/injection, stale searches, and leaderboards.');
 } finally {
