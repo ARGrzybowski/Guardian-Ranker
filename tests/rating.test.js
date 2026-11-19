@@ -113,6 +113,17 @@ test('rating is deterministic and ignores power, idle time, recent login and act
   f.aggregates[0].activities[0].values.fastestCompletionMsForActivity = { basic: { value: 1 } };
   assert.deepEqual(calculateAccountRating(f), original);
 });
+test('a provisional point stays within its evidence bounds even when partial metrics are strong', () => {
+  const f = fixture();
+  f.aggregates[0].activities[0].values.activityCompletions.basic.value = 750;
+  f.aggregates[0].activities[1].values.activityCompletions.basic.value = 1000;
+  f.aggregates[0].activities.push({ activityHash: 999, values: stats({ activityCompletions: 1 }) });
+  const r = calculateAccountRating(f);
+  assert.equal(r.overall.coverage, 75);
+  assert.ok(r.overall.score >= r.overall.range.min && r.overall.score <= r.overall.range.max);
+  assert.equal(r.overall.score, (r.overall.range.min + r.overall.range.max) / 2);
+  assert.equal(r.overall.tier, null);
+});
 test('malformed flags and absent mode metadata cannot fabricate complete rated evidence', () => {
   const f = fixture(); f.profile.profileCollectibles.data.collectibles[3] = {};
   f.profile.profileRecords.data.records[3] = { state: null };

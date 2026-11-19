@@ -65,6 +65,7 @@ try {
   assert.equal(accountRating.metrics.length, 10);
   assert.ok(accountRating.metrics.every(m => m.score == null || Number.isFinite(m.score) && m.score >= 0 && m.score <= 100));
   assert.ok(accountRating.overall.range.min >= 0 && accountRating.overall.range.max <= 1000);
+  if (accountRating.overall.score != null) assert.ok(accountRating.overall.score >= accountRating.overall.range.min - 1e-8 && accountRating.overall.score <= accountRating.overall.range.max + 1e-8, 'Displayed rating stays within its evidence bounds');
   console.log(JSON.stringify({ ratingVersion: accountRating.version, overall: accountRating.overall,
     metrics: accountRating.metrics.map(m => ({ id: m.id, value: m.value, score: m.score, status: m.status })), endgameCoverage: accountRating.endgameCoverage }));
   console.log(JSON.stringify({

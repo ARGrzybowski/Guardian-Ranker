@@ -121,10 +121,10 @@ export function combineRatings(metrics) {
   const lowSample = metrics.some(m => m.id === 'pvpPerformance' && m.evidence.lowSample);
   const complete = coverage === 100;
   const provisional = !complete || lowSample;
-  return { score: complete ? confirmed : coverage >= 70 ? observedAverage : null, observedAverage, coverage,
+  return { score: complete ? confirmed : coverage >= 70 ? (lower + upper) / 2 : null, observedAverage, coverage,
     complete, provisional, tier: !provisional ? ratingTier(confirmed / 10) : null,
     range: { min: Math.max(0, Math.min(1000, lower)), max: Math.max(0, Math.min(1000, upper)) },
-    reasons: [...(!complete ? ['Some metrics are missing or partial. The observed average is not comparable to a complete rating.'] : []), ...(lowSample ? ['Crucible performance has fewer than 100 recorded activities.'] : [])] };
+    reasons: [...(!complete ? ['Some metrics are missing or partial. The provisional score is the range midpoint, not a measured complete rating.'] : []), ...(lowSample ? ['Crucible performance has fewer than 100 recorded activities.'] : [])] };
 }
 
 export function calculateAccountRating({ profile = {}, career, aggregates, characters = Object.values(profile.characters?.data || {}), recordDefinitions, activityDefinitions }) {

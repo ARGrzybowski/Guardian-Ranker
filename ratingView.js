@@ -31,13 +31,13 @@ export async function renderAccountRating(target, { profile, characters, api, ma
 
   function draw(rating) {
     const overall = rating.overall;
-    const label = overall.complete ? overall.provisional ? 'Provisional overall rating' : 'Overall account rating' : 'Provisional observed average';
+    const label = overall.complete ? overall.provisional ? 'Provisional overall rating' : 'Overall account rating' : 'Provisional overall rating · range midpoint';
     const failed = rating.sourceStatus.filter(s => !s.available);
     target.innerHTML = `<p class="eyebrow">GUARDIAN ACCOUNT RATING · ${e(RATING_VERSION)}</p><h3>A complete picture of account achievement</h3>
       ${note('Ten metric ratings combine into a 0–1,000 account rating. This measures public achievements and experience against editorial benchmarks, not global standing or matchmaking skill.')}
       <div class="rating-hero"><div><p class="rating-label">${label}</p><div class="overall-rating-score">${overall.score == null ? 'Unrated' : e(scoreText(overall.score))}<span>${overall.score == null ? '' : ' / 1,000'}</span></div><p class="rating-tier">${overall.tier ? `${e(overall.tier.grade)} · ${e(overall.tier.name)}` : 'Provisional · no overall grade assigned'}</p></div>
       <div class="rating-coverage"><strong>${n(overall.coverage, 0)}% metric-weight coverage</strong>${note(`${rating.metrics.filter(m => m.status === 'rated').length} of 10 metrics fully rated. Calculated ${new Date(rating.calculatedAt).toLocaleString()}.`)}${!overall.complete ? note(`Unresolved-data range: ${scoreText(overall.range.min)}–${scoreText(overall.range.max)} / 1,000. This is a missing-data bound, not a statistical confidence interval.`) : ''}</div></div>
-      ${overall.reasons.map(note).join('')}${!overall.complete ? note('Private or failed metrics stay unrated. The observed average uses available weights and must not be compared with a complete rating. At least 70% weight coverage is needed to display that average.') : ''}
+      ${overall.reasons.map(note).join('')}${!overall.complete ? note('Private or failed metrics stay unrated. The range midpoint is a display convention, not a probability estimate. At least 70% weight coverage is needed to display it; compare complete ratings separately.') : ''}
       ${failed.length ? `<div class="rating-source-errors">${note(`${failed.length} data source(s) unavailable. Successful results are retained.`)}<button type="button" class="rating-retry">Retry unavailable data</button><details><summary>Unavailable sources</summary><ul>${failed.map(s => `<li>${e(s.name)}: ${e(s.error)}</li>`).join('')}</ul></details></div>` : ''}
       <div class="rating-metric-grid">${rating.metrics.map(metricCard).join('')}</div>
       <details class="rating-methodology"><summary>How the rating works · weights, benchmarks & safeguards</summary>

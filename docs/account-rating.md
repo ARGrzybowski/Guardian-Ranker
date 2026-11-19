@@ -117,10 +117,11 @@ C = sum of fully rated metric weights
 P = sum of fully rated metric contributions in overall points
 L = P + observed lower-bound contributions from partial metrics
 U = P + (100 − C) × 10
-Observed average = P / C × 100, if C ≥ 70
+Audit-only observed average = P / C × 100, if C > 0
+Provisional displayed rating = (L + U) / 2, if C ≥ 70
 ```
 
-The overall card shows a provisional observed average only at 70% or greater coverage; otherwise it is unrated. It also shows the unresolved-data range [L, U]. That range is a mathematical bound on the default weighted rating, not a statistical confidence interval. No incomplete account receives an overall grade, even if its observed average is high. Concealing a weak metric therefore cannot create a complete high-grade rating.
+The overall card shows a provisional range midpoint only at 70% or greater coverage; otherwise it is unrated. It also shows the unresolved-data range [L, U]. The midpoint is a display convention, not a probability estimate or an assumption that unknown metrics actually sit halfway through their possible values. The range is a mathematical bound on the default weighted rating, not a statistical confidence interval. No incomplete account receives an overall grade, even if its midpoint is high. Concealing a weak metric therefore cannot create a complete high-grade rating. The available-weight average is retained only for audit in JSON; it is not shown as the overall score, because strong partial lower bounds can put that average outside [L, U].
 
 The rating loads its own complete set of required inputs when opened. Loading more history pages or unrelated report sections does not silently change its weights or sample. Failed-source retries retain successful inputs. Reloading/searching the account creates a new profile snapshot. Profile and career calls are close in time but are not an atomic Bungie snapshot.
 
@@ -142,7 +143,7 @@ This example is enforced in the regression suite.
 | Commendations | 500 score | 50 | 10 |
 | **Overall** | **100% metric-weight coverage** | **B · Established** | **522.75 / 1,000** |
 
-If the PvP fields become unavailable, coverage falls to 80%. The remaining confirmed contribution is 405.5; the provisional observed average is 506.875, and the missing-data range is 405.5–605.5. There is no overall grade. This illustrates why a provisional observed average must not be compared with a complete rating.
+If the PvP fields become unavailable, coverage falls to 80%. The remaining confirmed contribution is 405.5; the missing-data range is 405.5–605.5, and its provisional midpoint is 505.5. There is no overall grade. The audit-only available-weight average would be 506.875. Neither replaces a complete rating.
 
 ## Exclusions and guardrails
 
