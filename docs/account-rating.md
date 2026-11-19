@@ -8,6 +8,8 @@ The main page and all-leaderboards page include Account Rating, sorted by unroun
 
 The existing Supabase worker calculates up to ten due ratings per run, within the same 240-operation, paced Bungie request budget and 80-second soft deadline. First-time catalog preparation takes two checkpointed invocations. A compact server-only manifest cache is checked daily. Active accounts and rating leaders target hourly ratings; recently active accounts target six hours; inactive accounts target 24 hours. Actual freshness depends on backlog and API availability.
 
+During rating backfills, the profile tranche yields capacity so clan/activity discovery is not starved. When no ratings are due, the existing maximum profile batch remains available.
+
 Only complete public GR-1.1 snapshots refreshed within seven days are eligible. Browser roles can read the guarded ranking view but cannot write ratings, inspect worker diagnostics, read the manifest cache or call worker queue functions. Private accounts and cross-save aliases are filtered through the existing canonical profile index. Transient errors preserve the previous verified snapshot and its original timestamp; privacy errors remove eligibility. Profile and rating workers share a three-minute crash-recovery lease, and all recurring work remains in Supabase.
 
 This system rates public Destiny 2 account achievements and experience. Every metric receives a 0–100 rating and a grade. Ten fixed weights combine into an overall rating with a ceiling of 1,000. It is an account-completeness and achievement model, not a population percentile, Elo rating, player valuation, anti-cheat verdict, or measure of a person's character.

@@ -1,5 +1,13 @@
 # Automatic Guardian indexing
 
+## Account-rating collection
+
+Apply `supabase/account-ratings.sql` after the base/capacity/leader-refresh setup. The deployed Edge bundle must also include `worker/ratings.mjs`, root `accountRating.js`, and root `reportData.js` along with the existing worker dependencies. Rating calculation runs inside the existing scheduled invocation and lease; there is no second collector or local service.
+
+The cloud worker backfills up to ten due GR-1.1 ratings per invocation. Two bounded cold-start phases prepare a compact title/endgame catalog in a server-only cache. Active accounts and rating leaders target hourly refreshes, recently active accounts six hours, and inactive accounts daily. The normal profile batch yields capacity during rating backfills so discovery remains active; all requests share the original pacing, operation and deadline limits. Only complete, public, current-version ratings refreshed within seven days enter `guardian_rating_rankings`.
+
+The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
+
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase
 Cron** every minute. Your computer can be switched off. No local scheduler,
 service, or persistent process is required.

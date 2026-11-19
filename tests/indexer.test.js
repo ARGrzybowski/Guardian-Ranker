@@ -75,6 +75,15 @@ function fakeBungie({ pages = [], budget = Infinity, profiles = {}, memberships 
 }
 const run = (store, bungie, extra = {}) => runIndexer({ store, bungie, now: () => NOW, ...extra });
 
+test('rating backfills reserve time for clan discovery instead of consuming the whole profile tranche', async () => {
+  const store = new MemoryStore(Array.from({length:100},(_,i)=>queued(i+1)));
+  const bungie=fakeBungie({pages:[[101]]});
+  const result=await run(store,bungie,{maxProfiles:100,maxRatings:10,rateProfiles:async()=>({ratings_attempted:10,ratings_saved:10})});
+  assert.equal(result.profiles_refreshed,60);
+  assert.equal(result.ratings_saved,10);
+  assert.ok(store.guardians.has('101'),'clan discovery still adds unsearched accounts');
+});
+
 test('clan members on later roster pages enter rankings without ever being searched', async () => {
   const store = new MemoryStore();
   const bungie = fakeBungie({ pages: [Array.from({ length: 50 }, (_, i) => i + 2), [52, 53]] });

@@ -78,7 +78,7 @@ export function createRatingRunner() {
         await store.saveRating(row.membership_id, rating, manifest.version, after(now(), eligible ? hours : 6));
         if (eligible) summary.ratings_saved++; else summary.ratings_partial++;
       } catch (error) {
-        if (error instanceof BudgetReached || error.databaseFailure || signal?.aborted) throw error;
+        if (error instanceof BudgetReached || error.databaseFailure || signal?.aborted) { error.ratingSummary=summary; throw error; }
         summary.rating_errors++;
         await store.failRating(row, after(now(), Math.min(24, 2 * 2 ** Math.min(row.rating_error_count || 0, 3))), Boolean(error.noPublicCharacters));
       }

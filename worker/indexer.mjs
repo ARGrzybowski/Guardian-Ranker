@@ -68,7 +68,7 @@ export function createBungieWorker({ apiKey, maxOperations = 300, signal, interv
   };
 }
 
-// Runs once per invocation. The scheduler lives in GitHub Actions, never on a PC.
+// Runs once per invocation. Scheduling lives in the cloud, never on a PC.
 export async function runIndexer({ store, bungie, signal, now = () => new Date(), seedNames = [], seedClans = [], maxProfiles = 100, maxDiscoveries = 25, maxClanPages = 20, profileConcurrency = 1, maxActivityScans = 0, maxRatings = 0, rateProfiles }) {
   const summary = { profiles_attempted: 0, profiles_refreshed: 0, cached_identity_hits: 0, seed_errors: 0, profile_errors: 0, discovery_errors: 0, roster_errors: 0, clans_found: 0, roster_members_seen: 0, roster_pages: 0, activity_scans: 0, activity_errors: 0, activity_members_seen: 0 };
   const runId = await store.start();
@@ -134,7 +134,11 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
       try {
         Object.assign(summary, await rateProfiles({ store, bungie, signal, now, limit: maxRatings }));
         if (summary.rating_manifest_prepared) return { status, ...summary };
+        // Preserve time for discovery instead of spending the entire remaining
+        // window on the first profile tranche during rating backfills.
+        maxProfiles = Math.max(0,maxProfiles-(summary.ratings_attempted || 0)*4);
       } catch (error) {
+        if (error.ratingSummary) Object.assign(summary,error.ratingSummary);
         if (error instanceof BudgetReached || error.databaseFailure || signal?.aborted) throw error;
         summary.rating_errors = (summary.rating_errors || 0) + 1;
       }
