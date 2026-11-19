@@ -33,6 +33,9 @@ const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
 recordDefinitions[31] = { displayProperties: { name: 'SECRET SPOILER', description: 'SECRET SOLUTION' }, stateInfo: { obscuredDescription: 'Keep playing to reveal.' } };
 const collectibleDefinitions = { 1: { displayProperties: { name: 'Test Exotic', description: 'An acquired item' } }, 2: { displayProperties: { name: 'Missing Ship', description: 'Not yet acquired' } } };
+const eververseCatalog = { schemaVersion: 1, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 2, items: [
+  [101, [1, 4], '<script>Test Shader</script>', 'Shaders', 300], [102, [2], 'Missing Ship', 'Ships', 2000], [103, [3], 'Test Shell', 'Ghost shells', null]
+] };
 const databaseScript = `
 window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
 window.__standingRetry = true;
@@ -81,6 +84,11 @@ const server = createServer(async (request, response) => {
     if (pathname === '/__supabase.js') {
       response.writeHead(200, { 'Content-Type': 'text/javascript' });
       response.end(databaseScript);
+      return;
+    }
+    if (pathname === '/eververseCatalog.json') {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify(eververseCatalog));
       return;
     }
     const file = resolve(root, `.${pathname === '/' ? '/index.html' : pathname}`);
@@ -164,6 +172,7 @@ try {
         body = json({ searchResults: [{ bungieGlobalDisplayName: prefix, bungieGlobalDisplayNameCode: 7753 }], hasMore: true });
       } else if (url.includes('/Profile/')) {
         const id = url.split('/Profile/')[1].split('/')[0];
+        const collectionsPrivate = id === 'private' || id === 'privatecollections';
         body = json({
           characters: { data: id === 'private' ? {} : Object.fromEntries([0, 1, 2].map(i => [String(i), {
             characterId: String(i), classType: i, light: 400 + i, minutesPlayedTotal: '6000',
@@ -171,7 +180,8 @@ try {
           }])) },
           profile: { data: { currentGuardianRank: 11, lifetimeHighestGuardianRank: 11 } },
           profileRecords: { data: { lifetimeScore: id === 'rival' ? 25000 : 10000 } },
-          profileCollectibles: { data: { collectibles: { 1: { state: 0 }, 2: { state: 1 } } } },
+          profileCollectibles: collectionsPrivate ? { privacy: 2 } : { data: { collectibles: { 1: { state: 0 }, 2: { state: 1 }, 3: { state: 0 } } } },
+          characterCollectibles: collectionsPrivate ? { privacy: 2 } : { data: { 0: { collectibles: { 4: { state: 0 } } }, 1: { collectibles: {} }, 2: { collectibles: {} } } },
           characterEquipment: { data: { 0: { items: [{ itemHash: 901, itemInstanceId: '10001' }] } } },
           itemComponents: { instances: { data: { 10001: { primaryStat: { value: 402 }, damageType: 3 } } }, sockets: { data: { 10001: { sockets: [{ plugHash: 902, isEnabled: true }] } } }, stats: { data: { 10001: { stats: { 905: { value: 78 } } } } } },
           characterProgressions: { data: { 0: { progressions: { 903: { level: 10, progressToNextLevel: 20, nextLevelAt: 100, currentResetCount: 2 } } } } },
@@ -261,6 +271,14 @@ try {
   await waitFor("document.querySelector('.clan-summary').textContent.includes('<script>Clan</script>')");
   assert.equal(await evaluate("document.querySelector('.clan-summary script')"), null);
   assert.ok(apiCalls.some(url => url.includes('components=100,104,200,202,204,205,300,304,305,800,900,1100,1400')));
+  await waitFor("document.querySelector('.eververse-value')?.textContent === '300 Bright Dust'");
+  await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
+  assert.match(await evaluate("document.querySelector('.eververse-details').innerText"), /1 of 2 owned Eververse cosmetics/);
+  await evaluate("document.querySelector('.eververse-items summary').click()");
+  await waitFor("document.querySelector('.eververse-items tbody')?.textContent.includes('<script>Test Shader</script>')");
+  assert.equal(await evaluate("document.querySelector('.eververse-items tbody script')"), null);
+  assert.equal(await evaluate("document.querySelectorAll('.eververse-items tbody tr').length"), 2);
+  await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
   async function openSection(id, condition) {
     await evaluate(`document.querySelector('[data-section="${id}"]').click()`);
     await waitFor(condition);
@@ -347,6 +365,8 @@ try {
   assert.equal(exported.sections.activityRecords.rows.length, 6);
   assert.equal(exported.sections.activityRecords.coverage.charactersLoaded, 3);
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
+  assert.equal(exported.sections.eververseNetWorth.brightDust, 300);
+  assert.equal(exported.sections.eververseNetWorth.unpricedCount, 1);
   assert.equal(exported.sections.accountRating.version, 'GR-3.1');
   assert.equal(exported.sections.accountRating.performance.percentile, 82);
   assert.equal(exported.sections.accountRating.knowledge.percentile, 88);
@@ -371,6 +391,9 @@ try {
   await search('Offline#1234');
   await waitFor("document.querySelector('#results [role=status]')?.textContent.includes('could not be queued')");
   assert.equal(await evaluate("document.querySelector('#results .bungie-name').textContent"), 'Offline#1234');
+  await search('PrivateCollections#1234');
+  await waitFor("document.querySelector('.eververse-details')?.textContent.includes('did not return public Collections data')");
+  assert.equal(await evaluate("document.querySelector('.eververse-value').textContent"), 'Unavailable');
   await search('Private#1234');
   await waitFor("document.getElementById('results').textContent.includes('No public characters')");
   await search('Missing#1234');
@@ -398,6 +421,10 @@ try {
   await mkdir(artifactDir, { recursive: true });
   const mobile = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'mobile.png'), Buffer.from(mobile.data, 'base64'));
+  await waitFor("document.querySelector('.eververse-value')?.textContent === '300 Bright Dust'");
+  await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click(); document.querySelector('.eververse-items summary').click()");
+  await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 2");
+  assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Eververse breakdown fits on mobile');
   await openSection('activities', "document.querySelectorAll('.match-open').length === 25");
   await openSection('characters', "document.querySelector('#report-characters').textContent.includes('Test Rifle')");
   await openSection('records', "document.querySelector('#report-records .catalogue-count')?.textContent.includes('31 matching')");

@@ -1,6 +1,7 @@
 // Read-only cloud smoke check. Never starts a worker or writes to Supabase.
 // Run by GitHub Actions only; local tests use entirely mocked responses.
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { searchExactName, loadPlayerProfile } from '../bungieApi.js';
 import { REPORT_COMPONENTS, overviewStats, createReportApi, careerGroups, collectionEntries, recordEntries, catalogueEntries } from '../reportData.js';
 import { createManifestClient } from '../manifest.js';
@@ -8,6 +9,7 @@ import { aggregateEntries } from '../reportInsights.js';
 import { calculatePerformance, CONTEST_RECORDS, TRIALS_TRACKERS, COMPETITIVE_PROGRESSION } from '../performanceRating.js';
 import { compactPerformanceActivities } from '../worker/performance.mjs';
 import { DUNGEON_SOLO_RECORDS } from '../activityCredit.js';
+import { eververseCollection, valueEververseCollection } from '../eververseValue.js';
 
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Live verification runs in GitHub Actions, not on your machine.');
 const controller = new AbortController();
@@ -20,6 +22,12 @@ try {
   const summary = overviewStats(profile);
   assert.ok(Object.keys(profile.characters?.data || {}).length > 0);
   assert.ok(summary.hours >= 0);
+  const ownership = eververseCollection(profile);
+  assert.ok(ownership?.owned.size > 0, 'Public Collections expose acquired cosmetic state');
+  const priceCatalog = JSON.parse(await readFile(new URL('../eververseCatalog.json', import.meta.url), 'utf8'));
+  const eververse = valueEververseCollection(ownership, priceCatalog);
+  assert.ok(eververse.brightDust > 0 && eververse.pricedCount > 0, 'Owned Eververse collectibles resolve to catalog prices');
+  console.log(JSON.stringify({ eververseBrightDust: eververse.brightDust, cosmeticsPriced: eververse.pricedCount, cosmeticsOwned: eververse.ownedCount, collectionCoverage: eververse.collectionCoverage }));
   const api = createReportApi(loaded.membership), manifest = createManifestClient();
   const career = await api.career(signal);
   assert.ok(career?.mergedAllCharacters, 'Account historical stats schema');

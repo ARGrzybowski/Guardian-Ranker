@@ -5,6 +5,7 @@ import { closestTriumphs, objectiveCompletion, activityInsights } from './report
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 import { drawPerformanceRating, loadGuardianStandings } from './performanceView.js';
 import { renderPlayerComparison } from './comparisonView.js';
+import { eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js';
 
 const number = (value, digits = 0) => numeric(value) == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const tile = (label, value) => `<div class="report-stat"><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`;
@@ -48,16 +49,13 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   const panel = id => container.querySelector(`#report-${id}`);
   const overview = panel('overview');
   overview.innerHTML = `<div class="section-heading"><div><p class="eyebrow">AT A GLANCE</p><h3>Guardian overview</h3></div></div>
-    <dl class="report-stats">${tile('Guardian Rank', number(summary.rank))}${tile('Highest rank', number(summary.highestRank))}${tile('Highest equipped power', number(summary.power))}${tile('Character time', `${number(summary.hours)} hours`)}${tile('Lifetime Triumph score', number(summary.triumphScore))}${tile('Active Triumph score', number(summary.activeScore))}${tile('Renewed rank', number(summary.renewedRank))}${tile('Collections acquired', summary.hasCollections ? `${number(summary.collectionAcquired)} / ${number(summary.collectionTotal)}` : 'Unavailable')}</dl>
+    <dl class="report-stats">${tile('Guardian Rank', number(summary.rank))}${tile('Highest rank', number(summary.highestRank))}${tile('Highest equipped power', number(summary.power))}${tile('Character time', `${number(summary.hours)} hours`)}${tile('Lifetime Triumph score', number(summary.triumphScore))}${tile('Active Triumph score', number(summary.activeScore))}${tile('Renewed rank', number(summary.renewedRank))}${tile('Collections acquired', summary.hasCollections ? `${number(summary.collectionAcquired)} / ${number(summary.collectionTotal)}` : 'Unavailable')}${tile('Commendation score', number(summary.commendationScore))}<div class="report-stat"><dt>Eververse net worth</dt><dd class="eververse-value" aria-live="polite">Calculating…</dd></div></dl>
+    <details class="report-details"><summary>Eververse pricing breakdown</summary><div class="eververse-details">${note('Loading Eververse prices…')}</div></details>
     <h3>Characters</h3><div class="character-section report-character-grid">${characters.map(c => `<article class="character-preview">${image(c.emblemBackgroundPath, `${CLASSES[c.classType] || 'Guardian'} emblem`)}<div><h4>${e(CLASSES[c.classType] || 'Guardian')}</h4><strong class="power-value">${e(number(c.light))} Power</strong><p>${e(number(numeric(c.minutesPlayedTotal) == null ? null : Number(c.minutesPlayedTotal) / 60))} hours · ${e(dateText(c.dateLastPlayed))}</p></div></article>`).join('')}</div>
     <div class="clan-summary"><h3>Clan</h3>${note('Loading clan membership…')}</div>
     <details class="report-details"><summary>Account identity & linked platforms</summary><p>Destiny membership ID: <code>${e(membership.membershipId)}</code></p><ul>${(user.destinyMemberships || []).map(m => `<li>${e(PLATFORMS[m.membershipType] || 'Other')} · ${e(m.displayName || bungieName)} ${m.crossSaveOverride && m.crossSaveOverride !== m.membershipType ? '(cross-save overridden)' : ''}</li>`).join('')}</ul><a href="https://www.bungie.net/7/en/User/Profile/${encodeURIComponent(membership.membershipType)}/${encodeURIComponent(membership.membershipId)}" target="_blank" rel="noopener noreferrer">View Bungie profile ↗</a></details>`;
 
   const shareStatus = container.querySelector('.share-status');
-  const commendationStats = document.createElement('div');
-  commendationStats.className = 'report-stat';
-  commendationStats.innerHTML = `<dt>Commendation score</dt><dd>${e(number(summary.commendationScore))}</dd>`;
-  overview.querySelector('.report-stats').appendChild(commendationStats);
   const ratingPreview = document.createElement('div');
   ratingPreview.className = 'account-rating-preview';
   ratingPreview.innerHTML = '<div><p class="eyebrow">GUARDIAN STANDINGS</p><p class="rating-preview-value">Performance, Knowledge and commendations</p></div><button type="button">View standings</button>';
@@ -123,6 +121,41 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     const data = await api.clan(signal); signal.throwIfAborted(); exported.sections.clan = data;
     overview.querySelector('.clan-summary').innerHTML = `<h3>Clan</h3>${data?.results?.length ? data.results.map(({ group }) => `<article class="clan-card"><h4><a href="https://www.bungie.net/7/en/Clan/Profile/${encodeURIComponent(group.groupId)}" target="_blank" rel="noopener noreferrer">${e(group.name)} ${group.clanInfo?.clanCallsign ? `[${e(group.clanInfo.clanCallsign)}]` : ''} ↗</a></h4><p>${e(group.motto || '')}</p><p>${e(number(group.memberCount))} members · Founded ${e(dateText(group.creationDate))}</p>${group.about ? `<details><summary>About this clan</summary><p class="preserve-lines">${e(group.about)}</p></details>` : ''}</article>`).join('') : note('No public clan membership found.')}`;
   });
+
+  const collection = eververseCollection(profile);
+  const eververseDetails = overview.querySelector('.eververse-details');
+  const eververseValue = overview.querySelector('.eververse-value');
+  if (collection) void withState(eververseDetails, loadEververseWorth);
+  else {
+    eververseValue.textContent = 'Unavailable';
+    eververseDetails.innerHTML = note('Bungie did not return public Collections data for this player.');
+  }
+
+  async function loadEververseWorth() {
+    eververseValue.textContent = 'Calculating…';
+    let catalog;
+    try { catalog = await loadEververseCatalog(signal); }
+    catch (error) {
+      if (!signal.aborted) eververseValue.textContent = 'Unavailable';
+      throw error;
+    }
+    signal.throwIfAborted();
+    const valuation = valueEververseCollection(collection, catalog);
+    exported.sections.eververseNetWorth = valuation;
+    eververseValue.textContent = valuation.brightDust == null ? 'No verified estimate' : `${number(valuation.brightDust)} Bright Dust`;
+    const amount = price => price == null ? 'Unpriced' : `${number(price)} Bright Dust`;
+    const rows = (headings, body) => `<div class="report-table-wrap"><table class="report-table"><thead><tr>${headings.map(heading => `<th scope="col">${heading}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+    eververseDetails.innerHTML = `${note(`${number(valuation.pricedCount)} of ${number(valuation.ownedCount)} owned Eververse cosmetics have verified Bright Dust prices${valuation.catalogDate ? ` · Bungie catalog dated ${valuation.catalogDate}` : ''}.`)}
+      ${valuation.collectionCoverage === 'partial' ? note('Some profile or character Collections are unavailable. The estimate covers visible unlocks.') : ''}
+      ${note('The estimate uses the lowest listed direct Bright Dust price per owned cosmetic. Bungie’s public data shows ownership and catalog prices. How a player acquired each cosmetic is private.')}
+      ${note('Gameplay and mixed-source rewards, Silver-only offers, bundles, and items without a public Eververse Collections entry contribute no value.')}
+      ${valuation.categories.length ? rows(['Cosmetic type', 'Priced / owned', 'Estimated value'], valuation.categories.map(row => `<tr><th scope="row">${e(row.category)}</th><td>${e(`${number(row.priced)} / ${number(row.owned)}`)}</td><td>${e(amount(row.priced ? row.brightDust : null))}</td></tr>`).join('')) : ''}
+      ${valuation.items.length ? '<details class="eververse-items"><summary>View individual cosmetics and prices</summary></details>' : ''}`;
+    const items = eververseDetails.querySelector('.eververse-items');
+    items?.addEventListener('toggle', () => {
+      if (items.open && !items.querySelector('table')) items.insertAdjacentHTML('beforeend', rows(['Cosmetic', 'Type', 'Bright Dust price'], valuation.items.map(item => `<tr><th scope="row">${e(item.name)}</th><td>${e(item.category)}</td><td>${e(amount(item.brightDust))}</td></tr>`).join('')));
+    });
+  }
 
   async function safeDefinition(type, hash) {
     try { return await manifest.definition(type, hash, signal); }
