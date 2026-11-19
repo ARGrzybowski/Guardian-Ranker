@@ -595,6 +595,11 @@ ul#suggestions li:hover {
 .rating-insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 20px; padding: 18px 0; }
 .rating-insights ul { padding-left: 20px; }
 .rating-insights li { font-size: .87rem; line-height: 1.7; margin-bottom: 10px; overflow-wrap: anywhere; }
+.comparison-status:empty { display: none; }
+.comparison-ratings meter { display: block; width: min(100%, 135px); height: 12px; margin-top: 5px; }
+.comparison-ratings small { color: var(--report-muted); }
+.compare-drivers { border-inline-start: 3px solid var(--report-accent); padding: 4px 16px; margin: 20px 0; }
+.compare-drivers ul { padding-inline-start: 20px; line-height: 1.7; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .rating-hero { grid-template-columns: 1fr; padding: 18px; gap: 10px; } .rating-metric { padding: 18px; } }
 @media print {
   .rating-hero, .rating-metric, .account-rating-preview { background: white; color: black; border-color: #aaa; }
