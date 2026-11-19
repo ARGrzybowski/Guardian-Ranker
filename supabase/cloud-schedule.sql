@@ -18,6 +18,6 @@ returns bigint language sql security invoker set search_path = '' as $$
 $$;
 revoke all on function guardian_private.invoke_guardian_indexer() from public, anon, authenticated;
 -- Disabled until the deployed function passes a manually triggered cloud run.
-select cron.schedule('guardian-indexer', '* * * * *', 'select guardian_private.invoke_guardian_indexer();');
+select cron.schedule('guardian-indexer', '*/5 * * * *', 'select guardian_private.invoke_guardian_indexer();');
 select cron.alter_job((select jobid from cron.job where jobname='guardian-indexer'), active := false);
 commit;

@@ -8,10 +8,12 @@ Apply `supabase/performance-rankings.sql` after the previous rating migrations. 
 
 Apply `supabase/crucible-seasons.sql` after `supabase/specialty-leaderboards.sql` before deploying the GR-3.2 worker. The existing cloud schedule advances one resumable Crucible history scan per surviving character. Private match IDs and cursors are service-role only. The database sends the totals to the worker, and public views expose the rating and best past season.
 
+Apply `supabase/indexer-disk-io.sql` after `supabase/crucible-seasons.sql` to limit repeat writes and database-wide coverage scans. Existing cloud projects can change the scheduled job with `cron.alter_job` using `*/5 * * * *`.
+
 The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
 
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase
-Cron** every minute. Your computer can be switched off. No local scheduler,
+Cron** every five minutes. Your computer can be switched off. No local scheduler,
 service, or persistent process is required.
 
 ## Cloud architecture
@@ -25,7 +27,7 @@ service, or persistent process is required.
   Bungie operations per run. One shared reservation queue paces calls at about three
   operations per second. New work stops after 80 seconds; a 110-second hard deadline
   leaves cleanup time within the platform runtime limit.
-- Supabase Cron invokes the function every 15 minutes. A random invocation token
+- Supabase Cron invokes the function every five minutes. A random invocation token
   stays in the restricted lease table and is never returned to browser clients.
   The function authenticates this token itself before doing any indexing.
 - The Edge runtime uses its built-in server credentials. No private Supabase key
@@ -39,6 +41,10 @@ The next run resumes unfinished work, including after operation limits or failur
 Searches can request a priority refresh, with a five-minute per-account cooldown.
 The status panel reports profiles refreshed in the last day and the due backlog,
 so a recent update to one player does not imply the entire dataset is fresh.
+Coverage counts refresh at most every 30 minutes. The worker records each run's
+outcome and releases its lease immediately. The seasonal collector caches the
+totals for unchanged match history. Seasonal specialty boards update rows when
+scores change and use the producing rating's timestamp for freshness.
 
 Active players (played within 24 hours) and top-100 leaders become due after 15
 minutes. Other players active within a week become due after two hours; older
