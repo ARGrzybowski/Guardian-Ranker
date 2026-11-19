@@ -1,4 +1,4 @@
-import { numeric, statValue, recordEntries, careerGroups, activityName, endgameType } from './reportData.js';
+import { numeric, statValue, careerGroups, activityName, endgameType } from './reportData.js';
 
 export const RATING_VERSION = 'GR-2.0';
 export const KD_ANCHORS = [[0, 0], [0.5, 20], [1, 50], [1.5, 75], [2, 90], [3, 100]];
@@ -57,12 +57,25 @@ export function titleEvidence(profile, definitions) {
   if (!definitions || profile.profileRecords?.data?.records == null) return { value: null, reason: 'Public record states and title definitions are required.' };
   const names = new Set();
   const recordScopes = [profile.profileRecords?.data, ...Object.values(profile.characterRecords?.data || {})];
-  let unresolved = recordScopes.flatMap(scope => Object.values(scope?.records || {})).filter(record => valid(record.state) == null || !Number.isInteger(Number(record.state))).length;
-  for (const record of recordEntries(profile)) {
-    if (!record.titleUnlocked) continue;
-    const def = definitions[record.hash];
-    if (!def) continue; // Retired/unavailable records are outside the current title catalog.
-    if (def.redacted || def.forTitleGilding) continue;
+  let unresolved = 0;
+  const states = new Map();
+  for (const scope of recordScopes) {
+    const records = scope?.records || {};
+    for (const hash of Object.keys(records)) {
+      const state = valid(records[hash]?.state);
+      if (!Number.isInteger(state)) { unresolved++; continue; }
+      const def = definitions[hash];
+      if ((state & 16) || !def || def.redacted || def.forTitleGilding) continue;
+      // Keep the report's preference for completed or redeemed duplicate records.
+      const previous = states.get(hash);
+      const becameComplete = !(state & 4) && (previous & 4);
+      const becameRedeemed = (state & 1) && !(previous & 1);
+      if (previous === undefined || becameComplete || becameRedeemed) states.set(hash, state);
+    }
+  }
+  for (const [hash, state] of states) {
+    if (!(state & 64)) continue;
+    const def = definitions[hash];
     const title = Object.values(def.titleInfo?.titlesByGender || {}).find(Boolean) || Object.values(def.titleInfo?.titlesByGenderHash || {}).find(Boolean);
     if (typeof title === 'string' && title.trim()) names.add(title.trim().toLocaleLowerCase());
     else if (def.titleInfo?.hasTitle !== false) unresolved++;
