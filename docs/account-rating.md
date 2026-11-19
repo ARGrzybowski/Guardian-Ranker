@@ -1,188 +1,85 @@
-# Guardian Account Rating — GR-1.1
+# Guardian Account Rating — GR-2.0
 
-GR-1.1 fixes the blanket provisional status in GR-1.0. Retired/unclassified activity and title records are outside the recognized scoring catalog; their absence no longer withholds an account grade. Small PvP samples keep their moderated metric and evidence note without invalidating the rest of the account. Genuine missing public inputs still produce partial results.
+GR-2.0 expands the account rating from ten to eighteen metrics. Five dimension summaries expose strengths across Achievement (35%), Endgame (36%), Crucible (20%), PvE (7%) and Recognition (2%). Higher veteran ceilings and new breadth metrics distinguish accounts that previously saturated the same lifetime counters. All benchmarks are editorial choices, not population percentiles or claims about competitive skill. Scores from earlier model versions are not comparable.
 
-## Cloud leaderboard
+## Metric definitions and weights
 
-The main page and all-leaderboards page include Account Rating, sorted by unrounded cloud-verified scores and membership ID for ties. Displayed scores are truncated to one decimal. Links open the rating report. Coverage counts identify how many indexed accounts have been rated and how many are due; this is the tracked population, not a global census.
+| Metric | Dimension | Weight | Measurement |
+| --- | --- | ---: | --- |
+| Triumph mastery | Achievement | 12% | lifetime Triumph points |
+| Title mastery | Achievement | 8% | distinct equippable titles |
+| Collection breadth | Achievement | 8% | acquired visible collectibles |
+| Guardian development | Achievement | 7% | highest lifetime Guardian Rank |
+| Raid experience | Endgame | 10% | Bungie raid completions |
+| Dungeon experience | Endgame | 8% | Bungie dungeon completions |
+| Crucible performance | Crucible | 12% | sample-adjusted combat score |
+| Crucible experience | Crucible | 4% | PvP activities entered |
+| PvE experience | PvE | 5% | PvE activities entered |
+| Commendation recognition | Recognition | 2% | current commendation score |
+| Raid breadth | Endgame | 5% | distinct raid families with 1+ completions |
+| Dungeon breadth | Endgame | 4% | distinct dungeon families with 1+ completions |
+| Raid repeat experience | Endgame | 3% | distinct raid families with 10+ completions |
+| Dungeon repeat experience | Endgame | 3% | distinct dungeon families with 10+ completions |
+| Endgame class versatility | Endgame | 3% | classes with 10+ endgame completions |
+| Crucible precision share | Crucible | 2% | sample-adjusted precision score |
+| PvE precision share | PvE | 2% | sample-adjusted precision score |
+| Crucible assist participation | Crucible | 2% | sample-adjusted assist score |
 
-The existing Supabase worker calculates up to ten due ratings per run, within the same 240-operation, paced Bungie request budget and 80-second soft deadline. First-time catalog preparation takes two checkpointed invocations. A compact server-only manifest cache is checked daily. Active accounts and rating leaders target hourly ratings; recently active accounts target six hours; inactive accounts target 24 hours. Actual freshness depends on backlog and API availability.
+Every metric is rated 0–100. Overall points = sum(weight × metric score ÷ 10), capped at 1,000. Dimension scores are weighted averages of their own metrics and add no extra points. Achievement metrics overlap with participation and endgame metrics; these are intentional, correlated views of account development, not independent statistical factors. Power, playtime, recent login and activity speed earn no points.
 
-During rating backfills, the profile tranche yields capacity so clan/activity discovery is not starved. When no ratings are due, the existing maximum profile batch remains available.
+## Published milestones
 
-Only complete public GR-1.1 snapshots refreshed within seven days are eligible. Browser roles can read the guarded ranking view but cannot write ratings, inspect worker diagnostics, read the manifest cache or call worker queue functions. Private accounts and cross-save aliases are filtered through the existing canonical profile index. Transient errors preserve the previous verified snapshot and its original timestamp; privacy errors remove eligibility. Profile and rating workers share a three-minute crash-recovery lease, and all recurring work remains in Supabase.
-
-This system rates public Destiny 2 account achievements and experience. Every metric receives a 0–100 rating and a grade. Ten fixed weights combine into an overall rating with a ceiling of 1,000. It is an account-completeness and achievement model, not a population percentile, Elo rating, player valuation, anti-cheat verdict, or measure of a person's character.
-
-**The weights and thresholds below are editorial design choices. They have not been fitted to a representative player population.** Version 1 is deliberately inspectable and testable before any future cohort calibration. Different play styles can excel in individual metrics while having different overall account ratings.
-
-## Weights and metric definitions
-
-| Metric | Weight | Maximum overall points | Measurement and rationale |
-| --- | ---: | ---: | --- |
-| Triumph mastery | 15% | 150 | Public lifetime Triumph score: sustained achievement, including legacy accomplishments |
-| Title mastery | 10% | 100 | Distinct equippable title names, deduplicated across characters and title records; excludes gilding-only records |
-| Collection breadth | 10% | 100 | Unique acquired, visible collectible hashes across exposed profile and character scopes |
-| Guardian development | 10% | 100 | Highest lifetime Guardian Rank rather than the seasonally reset current rank |
-| Raid experience | 15% | 150 | Sum of Bungie's raid completion counters across surviving characters |
-| Dungeon experience | 10% | 100 | Sum of Bungie's dungeon completion counters across surviving characters |
-| Crucible performance | 15% | 150 | 65% K/D rating and 35% win-rate rating, moderated toward 50 for small samples |
-| Crucible experience | 5% | 50 | Account-wide PvP activity entries: sustained participation with a deliberately small weight |
-| PvE experience | 8% | 80 | Account-wide PvE activity entries: general participation, not an assumption of difficult completions |
-| Commendation recognition | 2% | 20 | Current commendation score: limited weight because scores can reset and can be farmed |
-| **Total** | **100%** | **1,000** | Achievement breadth is intentional; no single metric can dominate |
-
-The achievement metrics total 45%, endgame experience 25%, combat/participation 28%, and commendations 2%. Some measures are correlated: a raid can contribute to participation, achievements and endgame experience. These are purposeful views of account development, not statistically independent dimensions.
-
-## Milestone curves
-
-Milestones are listed as **raw measurement → metric score**. They are scoring benchmarks, not claims about how common each achievement is.
-
-| Metric | Milestones |
+| Metric | Raw measurement → score |
 | --- | --- |
-| Triumph mastery | 0→0; 1,000→10; 10,000→30; 25,000→50; 50,000→70; 100,000→90; 150,000→100 |
-| Title mastery | 0→0; 1→15; 5→40; 10→60; 20→80; 35→100 |
-| Collection breadth | 0→0; 100→10; 1,000→30; 3,000→55; 6,000→80; 10,000→100 |
-| Guardian development | rank 1→0; 5→20; 6→35; 7→50; 8→65; 9→80; 10→90; 11→100 |
-| Raid experience | 0→0; 1→10; 10→30; 50→55; 200→80; 750→100 |
-| Dungeon experience | 0→0; 1→10; 10→30; 50→55; 250→80; 1,000→100 |
-| Crucible experience | 0→0; 10→10; 100→35; 500→60; 2,000→85; 5,000→100 |
-| PvE experience | 0→0; 50→10; 500→35; 2,500→60; 10,000→85; 25,000→100 |
-| Commendations | 0→0; 100→20; 500→50; 1,500→75; 5,000→100 |
+| Triumph mastery | 0 → 0; 1,000 → 10; 10,000 → 30; 25,000 → 50; 50,000 → 70; 100,000 → 90; 150,000 → 95; 250,000 → 100 |
+| Title mastery | 0 → 0; 1 → 15; 5 → 40; 10 → 60; 20 → 80; 35 → 90; 60 → 100 |
+| Collection breadth | 0 → 0; 100 → 10; 1,000 → 30; 3,000 → 55; 6,000 → 80; 10,000 → 90; 14,000 → 100 |
+| Guardian development | 1 → 0; 5 → 20; 6 → 35; 7 → 50; 8 → 65; 9 → 80; 10 → 90; 11 → 100 |
+| Raid experience | 0 → 0; 1 → 10; 10 → 30; 50 → 55; 200 → 80; 750 → 90; 2,000 → 100 |
+| Dungeon experience | 0 → 0; 1 → 10; 10 → 30; 50 → 55; 250 → 80; 1,000 → 90; 2,500 → 100 |
+| Crucible experience | 0 → 0; 10 → 10; 100 → 35; 500 → 60; 2,000 → 85; 5,000 → 100 |
+| PvE experience | 0 → 0; 50 → 10; 500 → 35; 2,500 → 60; 10,000 → 85; 25,000 → 100 |
+| Commendation recognition | 0 → 0; 100 → 20; 500 → 50; 1,500 → 75; 5,000 → 100 |
+| Raid breadth | 0 → 0; 1 → 15; 3 → 35; 6 → 60; 10 → 85; 14 → 100 |
+| Dungeon breadth | 0 → 0; 1 → 15; 3 → 35; 6 → 60; 10 → 85; 14 → 100 |
+| Raid repeat experience | 0 → 0; 1 → 20; 3 → 45; 6 → 70; 10 → 90; 14 → 100 |
+| Dungeon repeat experience | 0 → 0; 1 → 20; 3 → 45; 6 → 70; 10 → 90; 14 → 100 |
+| Endgame class versatility | 0 → 0; 1 → 35; 2 → 70; 3 → 100 |
 
-For volume metrics, interpolate within the surrounding milestone band using:
+Volume metrics interpolate logarithmically within each milestone band: y1 + (y2 − y1) × [ln(1+x) − ln(1+x1)] / [ln(1+x2) − ln(1+x1)]. Guardian Rank and class count use linear interpolation. Values at or above the top milestone cap at 100. A benchmark of 14 families is a fixed scoring ceiling, not a claim that every account can access fourteen current activities. Retired content and expansion ownership affect opportunity. Lifetime achievements favor established accounts.
 
-```text
-S(x) = y₁ + (y₂ − y₁) × [ln(1+x) − ln(1+x₁)] / [ln(1+x₂) − ln(1+x₁)]
-```
+## Endgame breadth, repeat experience and classes
 
-Guardian Rank uses ordinary linear interpolation between its milestones. Values at or above the top milestone cap at 100. Negative, missing and nonfinite measurements are unavailable. This is a capped, milestone-based progression curve with logarithmic interpolation within volume bands; it is not a fitted percentile distribution. Rank 11 is the current version's top scoring anchor, not a promise about future game rank caps.
+Completions still sum the recognized raid/dungeon counters across surviving characters. Each activity hash counts once per character. Families group activity variants by Bungie's PGCR image; original display name is the fallback, then a display name with a recognized difficulty suffix removed. Family keys include raid/dungeon mode. A missing family identity never falls back to the activity hash and inflates breadth: affected family metrics stay partial. The compact cloud catalog preserves the same metadata and produces the same scores as the full browser catalog. Family grouping is a metadata heuristic, not an official encounter taxonomy; shared artwork can merge activities and changed artwork can split them.
 
-## Crucible performance
+Breadth counts families with one or more completions. Repeat experience counts families with at least ten completions, summed across variants and characters. Class versatility counts Titan, Hunter and Warlock classes with at least ten recognized endgame completions each. Two characters of one class cannot earn two class credits. These counters can include checkpoints, repeat farming, legacy activities and Bungie classification errors; none verifies full clears, solo/flawless achievements, difficulty or teaching skill. Deleted characters are excluded. Retired/unclassified activity entries stay outside the recognized catalog and do not make the account provisional. Failed character requests or missing eligible counters do.
 
-K/D is computed from the same account-wide kills and deaths totals. Win rate is wins / activities entered. The model requires consistent nonnegative kills, deaths, wins and activity entries; wins cannot exceed entries. Missing or inconsistent fields leave the metric unrated.
+The report exposes the family totals and class completion counts behind these scores. It groups the original Pantheon tiers under one family and classifies Crota’s End as a raid, including variants tagged as dungeons by the manifest. Generic artwork uses the name fallback. Strongest areas sort fully rated metrics by score then weight. Next milestones are ordered by the additional points that individual metric would earn. [Bungie’s Pantheon guide](https://www.bungie.net/7/en/news/article/twid-05-02-2024), [Crota’s End raid announcement](https://www.bungie.net/7/en/News/article/twid-8-31-2023), [Bungie API catalog issue](https://github.com/Bungie-net/api/issues/1962).
 
-| K/D | Rating |
-| ---: | ---: |
-| 0 | 0 |
-| 0.5 | 20 |
-| 1.0 | 50 |
-| 1.5 | 75 |
-| 2.0 | 90 |
-| 3.0+ | 100 |
+## Combat quality and sample moderation
 
-| Win rate | Rating |
-| ---: | ---: |
-| 0% | 0 |
-| 25% | 20 |
-| 50% | 50 |
-| 65% | 80 |
-| 80%+ | 100 |
+Crucible performance retains its existing formula: raw = 65% K/D score + 35% win-rate score. K/D benchmarks are 0→0, 0.5→20, 1→50, 1.5→75, 2→90, 3→100. Win-rate benchmarks are 0%→0, 25%→20, 50%→50, 65%→80, 80%→100. Both interpolate linearly. Final = 50 + [activities ÷ (activities + 100)] × (raw − 50).
 
-These two tables interpolate linearly and clamp at 100. Positive kills with zero deaths receive the capped K/D subscore, while the interface explains that no deaths were recorded. Positive activity entries with zero kills and zero deaths leave performance unrated. Explicit zero activity entries receive zero account-performance/experience credit; they do not establish the player's underlying skill.
+Precision share = precision kills ÷ all kills × 100, separately for PvP and PvE. Benchmarks: 0%→0, 10%→20, 20%→45, 35%→75, 50%→100, linearly interpolated. Final = 50 + [kills ÷ (kills + 500)] × (raw − 50). This is a share of kills, not shot accuracy. Ability/explosive kills and weapon choices strongly affect it, which is why each metric has only 2% weight.
 
-```text
-Raw performance = 0.65 × K/D rating + 0.35 × win-rate rating
-Evidence factor = activity entries / (activity entries + 100)
-Performance rating = 50 + evidence factor × (raw performance − 50)
-```
+Crucible assist participation = assists ÷ activities entered. Benchmarks: 0→0, 1→20, 3→50, 5→75, 8→100. Final = 50 + [activities ÷ (activities + 100)] × (raw − 50). Modes, game length and teammate behavior affect assists. The metric does not establish team reliability or personality.
 
-The evidence factor is a versioned moderation heuristic, not a statistical confidence level. One perfect recorded activity scores approximately 50.495 instead of 100. A thousand perfect activities score approximately 95.455. Below 100 activities, the Crucible metric carries a small-sample evidence note. The moderation formula already accounts for that limitation, so the account can still receive an overall grade. At exactly 100 activities, the evidence factor is still 0.5; more history continues to moderate the raw result less strongly.
+Moderation toward 50 limits tiny perfect samples. It is a heuristic, not a confidence level or probability. Explicit zero participation earns zero experience credit. Missing, negative, nonfinite or contradictory counters remain unavailable; precision kills cannot exceed kills and wins cannot exceed entries. Low samples keep an evidence note without invalidating a complete account grade.
 
-Historical activity mixes, matchmaking, teams and game updates affect K/D and win rate. They do not support an Elo-equivalent claim. Commendations and activity volume cannot substitute for combat performance.
+## Grades, missing inputs and privacy
 
-## Overall formula and grades
+D: 0+, C: 20+, B: 40+, A: 60+, S: 75+, S+: 90+. Overall thresholds use this scale ×10. Grades use unrounded scores; displayed numbers truncate to one decimal so rounding cannot imply a higher grade.
 
-```text
-Overall points = Σ(metric score × metric weight / 10)
-```
+A complete overall grade requires all eighteen metrics. Each complete dimension can still receive a grade independently; an incomplete dimension has no score or grade. Missing weights are not redistributed, and hiding a weak metric cannot produce a complete high rating. Partial monotone counts provide a lower bound; unresolved weights contribute up to their full point ceiling to the upper bound. At least 70% weight coverage is required to display the provisional range midpoint. Below that, only the missing-data range is displayed. This range is not a statistical confidence interval.
 
-For example, an 80/100 metric with a 15% weight contributes 120 of its maximum 150 overall points. Calculations use full precision. Displayed score values are truncated to one decimal so rounding does not imply crossing a grade boundary.
+Titles deduplicate distinct equippable names and exclude redacted/gilding-only records; collection hashes merge visible acquired states across scopes. Commendations can reset or be farmed, so their weight remains 2%. Private or failed inputs do not become zeros. Successful empty public counters represent zero.
 
-| Grade | Name | Metric threshold | Overall threshold |
-| --- | --- | ---: | ---: |
-| D | Initiate | 0 | 0 |
-| C | Developing | 20 | 200 |
-| B | Established | 40 | 400 |
-| A | Advanced | 60 | 600 |
-| S | Elite | 75 | 750 |
-| S+ | Legend | 90 | 900 |
+## Worked example and safeguards
 
-Grade thresholds use unrounded scores. An overall grade requires the public inputs for all ten scoped metrics. Small PvP samples are moderated and labeled within that metric; they do not make the whole account provisional. Individual available metrics retain their own grades; their evidence notes still apply.
+The deterministic fixture in tests/rating.test.js has 25,000 Triumph points, five titles, 3,000 collectibles, rank 8, fifty raid and ten dungeon completions across one family each, and one developed class. Its PvP totals are 200 kills, 100 deaths, 80 precision kills, 300 assists, 100 entries and sixty wins; its PvE totals are 10,000 kills, 3,000 precision kills and 2,500 entries. With 500 commendation points, GR-2.0 yields 465.0619047619 / 1,000 (B). Every score, dimension, point contribution and published anchor is tested.
 
-## Missing, private and partial data
+The cloud worker independently calculates ratings with this exact module and the same public input requests. Browsers never submit trusted scores. The current-model read-only leaderboard excludes private, alias, partial, older-model and more-than-seven-day-old snapshots. Transient failures preserve the prior snapshot and timestamp; private profiles remove eligibility. GR-1.1 rows are recalculated during the GR-2.0 backfill rather than mixed into the new ranking.
 
-No unavailable metric is assigned a fabricated zero. Each metric has one of three states:
+The compact manifest projection is separately versioned; old cached projections are rebuilt in two bounded cloud invocations even if Bungie's manifest version did not change. Up to ten rating attempts per invocation share the original pacing, operation budget, soft deadline and three-minute lease with profile refresh and discovery. Target refreshes are hourly for active players/leaders, six-hourly for recently active accounts and daily for inactive accounts, subject to queue and API capacity. Recurring collection runs in Supabase only; the optional Actions runner remains disabled. JSON report exports contain the full expanded model and evidence.
 
-- **Rated:** required public evidence is available; score and grade enter the complete-weight total.
-- **Partial:** known evidence gives a lower bound, such as counters from only two characters or malformed required record flags. The card shows “at least” the observed score and receives no grade.
-- **Missing:** no defensible measurement is available; the card is unrated.
-
-Coverage means **available metric weight**, not confidence, percentage of all Destiny accounts, or certainty that every historic activity is represented. Collection breadth explicitly measures visible collectibles. If only character-level collectibles are available while the profile-wide scope is absent, the metric is partial. Invisible collectibles are omitted, and an item is counted when any exposed scope shows it acquired and visible.
-
-Endgame coverage requires every surviving character's aggregate response and valid counters for recognized raid/dungeon entries. GR-1.1 scopes the metric to the current recognized endgame catalog: retired, redacted, non-endgame and unclassified records are excluded rather than treated as missing endgame evidence. Failed character requests and missing counters on eligible entries still make the result partial. Duplicate activity hashes within one character are counted once; the same activity on different characters remains separate. A successful empty response represents zero counters, while a failed response represents missing evidence.
-
-For incomplete accounts:
-
-```text
-C = sum of fully rated metric weights
-P = sum of fully rated metric contributions in overall points
-L = P + observed lower-bound contributions from partial metrics
-U = P + (100 − C) × 10
-Audit-only observed average = P / C × 100, if C > 0
-Provisional displayed rating = (L + U) / 2, if C ≥ 70
-```
-
-The overall card shows a provisional range midpoint only at 70% or greater coverage; otherwise it is unrated. It also shows the unresolved-data range [L, U]. The midpoint is a display convention, not a probability estimate or an assumption that unknown metrics actually sit halfway through their possible values. The range is a mathematical bound on the default weighted rating, not a statistical confidence interval. No incomplete account receives an overall grade, even if its midpoint is high. Concealing a weak metric therefore cannot create a complete high-grade rating. The available-weight average is retained only for audit in JSON; it is not shown as the overall score, because strong partial lower bounds can put that average outside [L, U].
-
-The rating loads its own complete set of required inputs when opened. Loading more history pages or unrelated report sections does not silently change its weights or sample. Failed-source retries retain successful inputs. Reloading/searching the account creates a new profile snapshot. Profile and career calls are close in time but are not an atomic Bungie snapshot.
-
-## Worked example — synthetic, not a population benchmark
-
-This example is enforced in the regression suite.
-
-| Metric | Example measurement | Metric score | Overall contribution |
-| --- | --- | ---: | ---: |
-| Triumphs | 25,000 points | 50 | 75 |
-| Titles | 5 distinct titles | 40 | 40 |
-| Collections | 3,000 acquired visible collectibles | 55 | 55 |
-| Guardian development | lifetime highest rank 8 | 65 | 65 |
-| Raids | 50 Bungie completions | 55 | 82.5 |
-| Dungeons | 10 Bungie completions | 30 | 30 |
-| PvP performance | 200 kills, 100 deaths, 60 wins, 100 entries | 66.5 | 99.75 |
-| PvP experience | 100 entries | 35 | 17.5 |
-| PvE experience | 2,500 entries | 60 | 48 |
-| Commendations | 500 score | 50 | 10 |
-| **Overall** | **100% metric-weight coverage** | **B · Established** | **522.75 / 1,000** |
-
-If the PvP fields become unavailable, coverage falls to 80%. The remaining confirmed contribution is 405.5; the missing-data range is 405.5–605.5, and its provisional midpoint is 505.5. There is no overall grade. The audit-only available-weight average would be 506.875. Neither replaces a complete rating.
-
-## Exclusions and guardrails
-
-- Power is excluded because its scale and relevance change across releases.
-- Playtime is excluded because character totals include idle time and omit deleted characters.
-- Fastest activity times are excluded because checkpoint runs and activity variants are not comparable full runs.
-- Recent login has no scoring effect: taking a break does not erase account achievements.
-- Raid/dungeon counters can include checkpoints and repeated farming. They do not prove full clears, solo/flawless completions or encounter mastery.
-- Titles differ in difficulty; a distinct-title count is a transparent depth proxy, not difficulty-normalized achievement quality.
-- Collections include cosmetics and legacy items; ownership can reflect purchases and availability as well as gameplay.
-- Commendations can reset and can be farmed; their total contribution is capped at 20/1,000 points.
-- A specialist can have an excellent metric score and a lower broad-account score. The model does not claim that a PvE-focused account is a worse PvP player, or vice versa.
-- Ratings are calculated from public data in the report. Browsers do not submit scores to trusted leaderboard storage. The Supabase cloud worker independently fetches the required Bungie inputs and stores verified snapshots. The account-rating leaderboard includes only complete public GR-1.1 scores refreshed within seven days; old versions, private accounts and genuine partial ratings are excluded.
-
-## Sources, ownership and maintenance
-
-The scoring configuration is owned by the Guardian Ranker codebase in `accountRating.js`; changes to metric definitions, weights, anchors, privacy treatment or grade rules require a scoring-version change and updated tests/docs. Results and JSON exports carry the model version and calculation timestamp. Compare accounts only under compatible versions and coverage rules.
-
-Controlling source definitions:
-
-- [Bungie profile fields](https://bungie-net.github.io/multi/schema_Destiny-Entities-Profiles-DestinyProfileComponent.html): current versus highest lifetime Guardian Rank.
-- [Record flags](https://bungie-net.github.io/multi/schema_Destiny-DestinyRecordState.html) and [title definitions](https://bungie-net.github.io/multi/schema_Destiny-Definitions-Records-DestinyRecordTitleBlock.html): completion, invisibility, equippable titles, and gender-localized names.
-- [Collectible flags](https://bungie-net.github.io/multi/schema_Destiny-DestinyCollectibleState.html): acquired versus invisible states.
-- [Historical account statistics](https://bungie-net.github.io/multi/operation_get_Destiny2-GetHistoricalStatsForAccount.html): account-wide PvP/PvE totals, which can include deleted characters.
-- [Aggregate activity statistics](https://bungie-net.github.io/multi/operation_get_Destiny2-GetDestinyAggregateActivityStats.html): per-character completion counters; activity mode definitions classify raid/dungeon records.
-- [Commendation component](https://bungie-net.github.io/multi/schema_Destiny-Components-Social-DestinySocialCommendationsComponent.html): current total score.
-
-Before a future calibration release, obtain a representative public-account cohort, inspect coverage by account age/platform/play style/privacy, assess correlated metrics and farming sensitivity, and publish any resulting benchmark changes under a new version. The current convenience sample used for live smoke tests does not establish population distributions or fairness across those cohorts.
-
-Validation includes exact milestones, monotonicity/caps, weighted arithmetic, the worked example, missing/private data, partial character/definition coverage, title/collection deduplication, PvP small samples/contradictions, ignored power/playtime/speed fields, browser retries, mobile layout, export and direct rating links. GitHub Actions performs read-only live verification; no collector or live verification script runs locally.
+Sources: [Bungie activity metadata](https://bungie-net.github.io/multi/schema_Destiny-Definitions-DestinyActivityDefinition.html), [account historical statistics](https://bungie-net.github.io/multi/schema_Destiny-HistoricalStats-DestinyHistoricalStatsAccountResult.html), and [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security). The formulas and weights are this project's design, not Bungie-endorsed rankings.

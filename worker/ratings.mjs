@@ -1,5 +1,6 @@
 import { loadPlayerProfile } from '../bungieApi.js';
 import { calculateAccountRating, RATING_VERSION } from '../accountRating.js';
+import { endgameType } from '../reportData.js';
 import { BudgetReached } from './indexer.mjs';
 
 export function compactTitles(definitions) {
@@ -10,8 +11,10 @@ export function compactTitles(definitions) {
 }
 export function compactActivities(definitions) {
   return Object.fromEntries(Object.entries(definitions).flatMap(([hash, d]) => {
-    const modes = new Set([...(d.activityModeTypes || []), d.directActivityModeType]);
-    return !d.redacted && (modes.has(4) || modes.has(82)) ? [[hash, { directActivityModeType: modes.has(4) ? 4 : 82 }]] : [];
+    const type = endgameType(d);
+    return type ? [[hash, { directActivityModeType: type === 'raid' ? 4 : 82,
+      pgcrImage: d.pgcrImage, displayProperties: { name: d.displayProperties?.name },
+      originalDisplayProperties: { name: d.originalDisplayProperties?.name } }]] : [];
   }));
 }
 const after = (date, hours) => new Date(date.getTime() + hours * 3600000).toISOString();
@@ -26,6 +29,8 @@ export function createRatingRunner() {
     if (!rows.length) return summary;
     const request = bungie.request.bind(bungie);
     let manifest = cachedManifest || await store.ratingManifest();
+    // Projection shape is versioned independently of Bungie's content version.
+    if (manifest?.projection_version !== 2) manifest = undefined;
     const age = manifest?.checked_at ? now().getTime() - Date.parse(manifest.checked_at) : Infinity;
     if (!manifest || age >= 86400000) {
       const metadata = (await request('/Destiny2/Manifest/')).Response;
@@ -38,7 +43,7 @@ export function createRatingRunner() {
         const records = await bungie.staticJson(paths?.DestinyRecordDefinition);
         const titles = compactTitles(records);
         if (!Object.keys(titles).length) throw new Error('Title catalog is empty.');
-        manifest = { version: metadata.version, records: titles, activities: {}, activity_path: paths.DestinyActivityDefinition, ready: false, checked_at: now().toISOString() };
+        manifest = { version: metadata.version, projection_version: 2, records: titles, activities: {}, activity_path: paths.DestinyActivityDefinition, ready: false, checked_at: now().toISOString() };
         await store.saveRatingManifest(manifest);
         cachedManifest = manifest;
         return { ...summary, rating_manifest_prepared: 1 };

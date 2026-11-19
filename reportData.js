@@ -5,6 +5,20 @@ export const CLASSES = ['Titan', 'Hunter', 'Warlock'];
 export const PLATFORMS = { 1: 'Xbox', 2: 'PlayStation', 3: 'Steam', 4: 'Blizzard', 5: 'Stadia', 6: 'Epic Games', 10: 'Demon' };
 export const ACTIVITY_MODES = { 0: 'All activities', 2: 'Story', 3: 'Strikes', 4: 'Raids', 5: 'Crucible', 16: 'Nightfalls', 63: 'Gambit', 82: 'Dungeons', 84: 'Trials of Osiris' };
 
+export function activityName(definition) {
+  return definition?.originalDisplayProperties?.name?.trim() || definition?.displayProperties?.name?.trim();
+}
+
+export function endgameType(definition) {
+  if (!definition || definition.redacted) return null;
+  const modes = definition.activityModeTypes || [];
+  if (modes.includes(4) || definition.directActivityModeType === 4) return 'raid';
+  if (!modes.includes(82) && definition.directActivityModeType !== 82) return null;
+  // Some Crota's End variants ship with dungeon mode tags (Bungie API issue #1962).
+  if (definition.pgcrImage === '/img/destiny_content/pgcr/raid_crotas_end.jpg' || /^crota['’]s end(?::|$)/i.test(activityName(definition))) return 'raid';
+  return 'dungeon';
+}
+
 export function numeric(value) {
   if (value == null || value === '') return null;
   const number = Number(value);

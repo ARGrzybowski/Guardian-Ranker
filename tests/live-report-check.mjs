@@ -6,6 +6,7 @@ import { REPORT_COMPONENTS, overviewStats, createReportApi, careerGroups, collec
 import { createManifestClient } from '../manifest.js';
 import { aggregateEntries } from '../reportInsights.js';
 import { calculateAccountRating } from '../accountRating.js';
+import { compactActivities, compactTitles } from '../worker/ratings.mjs';
 
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Live verification runs in GitHub Actions, not on your machine.');
 const controller = new AbortController();
@@ -62,7 +63,10 @@ try {
   const ratingCharacters = Object.values(profile.characters.data);
   const ratingAggregates = await Promise.all(ratingCharacters.map(c => c.characterId === character.characterId ? aggregates : api.aggregates(c.characterId, signal)));
   const accountRating = calculateAccountRating({ profile, career, characters: ratingCharacters, aggregates: ratingAggregates, recordDefinitions: ratingRecordDefinitions, activityDefinitions: ratingActivityDefinitions });
-  assert.equal(accountRating.metrics.length, 10);
+  assert.equal(accountRating.metrics.length, 18);
+  const cloudProjection = calculateAccountRating({ profile, career, characters: ratingCharacters, aggregates: ratingAggregates, recordDefinitions: compactTitles(ratingRecordDefinitions), activityDefinitions: compactActivities(ratingActivityDefinitions) });
+  assert.equal(cloudProjection.overall.score, accountRating.overall.score, 'Cloud projection matches the full live browser model');
+  assert.deepEqual(cloudProjection.dimensions, accountRating.dimensions);
   assert.equal(accountRating.overall.provisional,false,'Legacy metadata does not make Hawk provisional');
   assert.ok(accountRating.overall.tier,'Complete public account receives an overall grade');
   assert.ok(accountRating.metrics.every(m => m.score == null || Number.isFinite(m.score) && m.score >= 0 && m.score <= 100));

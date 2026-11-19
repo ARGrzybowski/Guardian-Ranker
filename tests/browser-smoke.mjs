@@ -13,7 +13,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const fixtureRows = Array.from({ length: 8 }, (_, i) => ({
   membership_id: String(i), bungie_name: i === 7 ? 'Hawk#7753' : `Player${i}#1234`,
   triumph_score: 1000 - i, guardian_rank: 11 - i, time_played_hours: 200 - i,
-  class_type: 'Titan', light_level: 400 - i, account_rating: 900-i, rating_grade: 'S', rating_version: 'GR-1.1'
+  class_type: 'Titan', light_level: 400 - i, account_rating: 900-i, rating_grade: 'S', rating_version: 'GR-2.0'
 }));
 const basicStats = values => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { basic: { value } }]));
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
@@ -151,7 +151,7 @@ try {
         const page = Number(new URL(url).searchParams.get('page'));
         if (page === 1 && url.includes('/Character/1/') && !historyFailure) { historyFailure = true; body = { ErrorCode: 99, Message: 'History temporarily unavailable' }; }
         else body = json({ activities: Array.from({ length: page === 0 ? 25 : page === 1 ? 1 : 0 }, (_, i) => ({ period: '2026-11-18', activityDetails: { instanceId: String(page * 25 + i + 1), referenceId: 904, mode: 4 }, values: basicStats({ completed: 1, kills: 50, deaths: 2, activityDurationSeconds: 600 }) })) });
-      } else if (url.includes('/Stats/')) body = url.includes('/Character/') ? json({ raid: { allTime: basicStats({ kills: 100, deaths: 10, activitiesEntered: 20, activitiesWon: 15 }) } }) : json({ mergedAllCharacters: { results: { allPvP: { allTime: basicStats({ kills: 200, deaths: 100, assists: 50, activitiesEntered: 100, activitiesWon: 60, secondsPlayed: 7200 }) }, allPvE: { allTime: basicStats({ kills: 1000, deaths: 10, activitiesEntered: 50, activitiesWon: 45 }) } } } });
+      } else if (url.includes('/Stats/')) body = url.includes('/Character/') ? json({ raid: { allTime: basicStats({ kills: 100, deaths: 10, activitiesEntered: 20, activitiesWon: 15 }) } }) : json({ mergedAllCharacters: { results: { allPvP: { allTime: basicStats({ kills: 200, precisionKills: 80, deaths: 100, assists: 50, activitiesEntered: 100, activitiesWon: 60, secondsPlayed: 7200 }) }, allPvE: { allTime: basicStats({ kills: 1000, precisionKills: 300, deaths: 10, activitiesEntered: 50, activitiesWon: 45 }) } } } });
       else if (/\/Manifest\/Destiny\w+Definition\/\d+\//.test(url)) body = json({ displayProperties: { name: url.includes('/901/') ? 'Test Rifle' : url.includes('/902/') ? 'Test Perk' : url.includes('/903/') ? 'Vanguard Reputation' : url.includes('/905/') ? 'Handling' : url.includes('/906/') ? 'Ally' : 'Test Raid', description: 'Public definition', icon: '/icon.png' }, inventory: { tierType: 6 }, itemTypeDisplayName: 'Scout Rifle' });
       else if (url.includes('/Manifest/')) body = json({ jsonWorldComponentContentPaths: { en: { DestinySeasonDefinition: '/seasons.json', DestinyRecordDefinition: '/records.json', DestinyCollectibleDefinition: '/collectibles.json', DestinyMetricDefinition: '/metrics.json', DestinyProgressionDefinition: '/progressions.json', DestinyActivityDefinition: '/activities.json' } } });
       else if (url.includes('/Settings/')) body = json({ destiny2CoreSettings: { currentSeasonHash: 1 } });
@@ -261,12 +261,14 @@ try {
   await evaluate("{ const original = URL.createObjectURL.bind(URL); URL.createObjectURL = blob => { window.__lastDownloadText = blob.text(); return original(blob); }; HTMLAnchorElement.prototype.click = function() {}; document.querySelector('.aggregate-csv').click(); }");
   assert.ok((await evaluate('window.__lastDownloadText')).includes('Test Dungeon'));
   assert.ok(!(await evaluate('window.__lastDownloadText')).includes('Test Raid'));
-  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 10");
+  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 18");
   assert.ok(await evaluate("document.querySelector('.rating-coverage').textContent.includes('100%')"));
-  assert.ok(await evaluate("document.querySelector('#report-rating').textContent.includes('GR-1.1')"));
+  assert.ok(await evaluate("document.querySelector('#report-rating').textContent.includes('GR-2.0')"));
+  assert.equal(await evaluate("document.querySelectorAll('.rating-dimension').length"), 5);
+  assert.ok(await evaluate("document.querySelector('.rating-insights').textContent.includes('Next milestones')"));
   assert.equal(await evaluate('window.location.hash'), '#rating');
-  assert.equal(await evaluate("document.querySelectorAll('.rating-metric meter').length"), 10);
-  assert.ok(await evaluate("document.querySelector('.rating-methodology').textContent.includes('Weights total 100%')"));
+  assert.equal(await evaluate("document.querySelectorAll('.rating-metric meter').length"), 18);
+  assert.ok(await evaluate("[...document.querySelectorAll('.rating-methodology')].some(d => d.textContent.includes('Weights total 100%'))"));
   await mkdir(join(root, 'test-artifacts'), { recursive: true });
   await evaluate("document.querySelector('#report-rating').scrollIntoView({block:'start'})");
   const desktopRating = await cdp('Page.captureScreenshot', { format: 'png' });
@@ -299,7 +301,7 @@ try {
   assert.equal(exported.sections.activityRecords.rows.length, 6);
   assert.equal(exported.sections.activityRecords.coverage.charactersLoaded, 3);
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
-  assert.equal(exported.sections.accountRating.version, 'GR-1.1');
+  assert.equal(exported.sections.accountRating.version, 'GR-2.0');
   assert.equal(exported.sections.accountRating.overall.coverage, 100);
   assert.equal(exported.sections.accountRating.overall.provisional, false);
   await evaluate("document.querySelector('[data-section=overview]').click()");
@@ -310,7 +312,7 @@ try {
   await search('Retry#1234');
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Retry#1234'");
   await openSection('rating', "document.querySelector('.rating-retry') != null");
-  assert.ok(await evaluate("document.querySelector('.rating-coverage').textContent.includes('75%')"));
+  assert.ok(await evaluate("document.querySelector('.rating-coverage').textContent.includes('64%')"));
   assert.ok(await evaluate("document.querySelector('.rating-tier').textContent.includes('no overall grade')"));
   const retryCareerCalls = apiCalls.filter(url => url.includes('/Account/retry/Stats/')).length;
   await evaluate("document.querySelector('.rating-retry').click()");
@@ -358,12 +360,12 @@ try {
   await evaluate("document.querySelector('#report-endgame').scrollIntoView({block:'start'})");
   const mobileRecords = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'activity-records-mobile.png'), Buffer.from(mobileRecords.data, 'base64'));
-  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 10");
+  await openSection('rating', "document.querySelectorAll('.rating-metric').length === 18");
   await evaluate("document.querySelector('#report-rating').scrollIntoView({block:'start'})");
   const mobileRating = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'account-rating-mobile.png'), Buffer.from(mobileRating.data, 'base64'));
   await cdp('Page.navigate', { url: `${origin}/?name=Hawk%237753#rating` });
-  await waitFor("document.querySelectorAll('.rating-metric').length === 10 && document.querySelector('.rating-coverage').textContent.includes('100%')");
+  await waitFor("document.querySelectorAll('.rating-metric').length === 18 && document.querySelector('.rating-coverage').textContent.includes('100%')");
   assert.equal(await evaluate("document.querySelector('#report-rating').hidden"), false, 'Shared rating links open and calculate the correct section');
   await cdp('Emulation.clearDeviceMetricsOverride');
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html` });
