@@ -5,6 +5,7 @@ import { searchExactName, loadPlayerProfile, formatBungieName } from './bungieAp
 import { closestTriumphs, objectiveCompletion, activityInsights } from './reportInsights.js';
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 import { renderAccountRating } from './ratingView.js';
+import { RATING_METRICS } from './accountRating.js';
 
 const number = (value, digits = 0) => numeric(value) == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const tile = (label, value) => `<div class="report-stat"><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`;
@@ -58,7 +59,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   overview.querySelector('.report-stats').appendChild(commendationStats);
   const ratingPreview = document.createElement('div');
   ratingPreview.className = 'account-rating-preview';
-  ratingPreview.innerHTML = '<div><p class="eyebrow">ACCOUNT RATING</p><p class="rating-preview-value">Ten metric ratings · one overall account rating</p></div><button type="button">Calculate account rating</button>';
+  ratingPreview.innerHTML = `<div><p class="eyebrow">ACCOUNT RATING</p><p class="rating-preview-value">${RATING_METRICS.length} metric ratings · five dimensions · one overall account rating</p></div><button type="button">Calculate account rating</button>`;
   overview.querySelector('.report-stats').after(ratingPreview);
   ratingPreview.querySelector('button').addEventListener('click', () => container.querySelector('.report-nav [data-section=rating]').click());
   container.querySelector('[data-action=share]').addEventListener('click', async () => {

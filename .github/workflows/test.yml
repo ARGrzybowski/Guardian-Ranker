@@ -56,3 +56,5 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f tests/sql/capacity.sql
           psql -v ON_ERROR_STOP=1 -f supabase/account-ratings.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/ratings.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/rating-depth.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/rating-depth.sql
