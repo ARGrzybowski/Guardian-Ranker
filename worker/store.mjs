@@ -87,7 +87,8 @@ export class IndexStore {
     return this.request('guardian_performance?on_conflict=membership_id', {
       method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
       body: {
-        membership_id: id, rating_version: rating.version, points: rating.points, eligible: rating.eligible,
+        membership_id: id, rating_version: rating.version, precise_points: rating.points,
+        points: rating.points == null ? null : Math.floor(rating.points), eligible: rating.eligible,
         metrics: rating.metrics, competitive_peak: rating.competitivePeak, commendations: rating.commendations,
         last_rated_at: rating.calculatedAt, next_rating_at: nextRating, consecutive_errors: 0
       }

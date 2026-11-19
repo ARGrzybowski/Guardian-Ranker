@@ -4,7 +4,7 @@
 
 Apply `supabase/account-ratings.sql` after the base/capacity/leader-refresh setup. The deployed Edge bundle must also include `worker/ratings.mjs`, root `accountRating.js`, and root `reportData.js` along with the existing worker dependencies. Rating calculation runs inside the existing scheduled invocation and lease; there is no second collector or local service.
 
-Apply `supabase/performance-rankings.sql` after the previous rating migrations. It adds separate GR-3.0 snapshots and cohort views. The worker calculates up to four performance snapshots per run, reusing the compact activity catalog and sharing the existing Bungie pacing, operation budget and deadline with discovery. Active accounts target a six-hour refresh and inactive accounts target a daily refresh. The browser reads verified points and percentile standings from Supabase.
+Apply `supabase/performance-rankings.sql` after the previous rating migrations. It adds separate GR-3.0 snapshots and cohort views. Apply `supabase/activity-credit.sql` for GR-3.1 fractional points and version-separated standings. The worker calculates up to four performance snapshots per run, reusing the compact activity catalog and sharing the existing Bungie pacing, operation budget and deadline with discovery. Active accounts target a six-hour refresh and inactive accounts target a daily refresh. The browser reads verified points and percentile standings from Supabase.
 
 The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
 

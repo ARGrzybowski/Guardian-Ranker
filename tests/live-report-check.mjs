@@ -6,7 +6,8 @@ import { REPORT_COMPONENTS, overviewStats, createReportApi, careerGroups, collec
 import { createManifestClient } from '../manifest.js';
 import { aggregateEntries } from '../reportInsights.js';
 import { calculatePerformance, CONTEST_RECORDS, TRIALS_TRACKERS, COMPETITIVE_PROGRESSION } from '../performanceRating.js';
-import { compactActivities } from '../worker/ratings.mjs';
+import { compactPerformanceActivities } from '../worker/performance.mjs';
+import { DUNGEON_SOLO_RECORDS } from '../activityCredit.js';
 
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Live verification runs in GitHub Actions, not on your machine.');
 const controller = new AbortController();
@@ -46,6 +47,7 @@ try {
     assert.ok(Object.keys(definitions).length > 0, `${section} catalogue`);
     if (section === 'records') {
       assert.ok(Object.keys(CONTEST_RECORDS).every(hash => definitions[hash]), 'Every tracked contest record exists in the current catalog');
+      assert.ok(DUNGEON_SOLO_RECORDS.every(row => definitions[row.solo] && definitions[row.flawless]), 'Solo and solo flawless proof are catalogued');
     }
     if (section === 'metrics') assert.ok(TRIALS_TRACKERS.every(hash => definitions[hash]), 'Both Trials trackers exist');
     if (section === 'progression') assert.ok(definitions[COMPETITIVE_PROGRESSION], 'Competitive progression exists');
@@ -69,12 +71,12 @@ try {
   const histories = await Promise.all(ratingCharacters.map(c => api.history(c.characterId, 5, 0, signal).then(page => ({ activities: page.activities ?? [] }))));
   const ratingInput = { profile, career, characters: ratingCharacters, aggregates: ratingAggregates, histories };
   const performance = calculatePerformance({ ...ratingInput, activityDefinitions: ratingActivityDefinitions });
-  const cloudProjection = calculatePerformance({ ...ratingInput, activityDefinitions: compactActivities(ratingActivityDefinitions) });
-  assert.equal(performance.version, 'GR-3.0');
-  assert.equal(performance.metrics.length, 8);
+  const cloudProjection = calculatePerformance({ ...ratingInput, activityDefinitions: compactPerformanceActivities(ratingActivityDefinitions) });
+  assert.equal(performance.version, 'GR-3.1');
+  assert.equal(performance.metrics.length, 11);
   assert.deepEqual(cloudProjection.metrics, performance.metrics);
   assert.ok(performance.complete && performance.eligible, JSON.stringify(performance.metrics.filter(metric => metric.points == null)));
-  assert.equal(performance.points, performance.metrics.reduce((sum, metric) => sum + metric.points, 0));
+  assert.ok(Math.abs(performance.points - performance.metrics.reduce((sum, metric) => sum + metric.points, 0)) < 1e-7);
   console.log(JSON.stringify({ account: 'Hawk#7753', ratingVersion: performance.version, points: performance.points,
     metrics: performance.metrics.map(m => ({ id: m.id, value: m.value, points: m.points, matches: m.matches, events: m.events })) }));
   console.log(JSON.stringify({

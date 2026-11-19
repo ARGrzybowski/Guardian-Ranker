@@ -16,7 +16,7 @@ async function lookup(table, columns, membershipId, signal) {
 export async function loadGuardianStandings(membershipId, signal) {
   const standing = 'standing,cohort_size,percentile';
   const result = await Promise.allSettled([
-    lookup('guardian_performance_reports', `rating_version,points,eligible,metrics,last_rated_at,${standing}`, membershipId, signal),
+    lookup('guardian_activity_reports', `rating_version,points,eligible,metrics,last_rated_at,${standing}`, membershipId, signal),
     lookup('guardian_knowledge_rankings', `triumph_score,${standing}`, membershipId, signal),
     lookup('guardian_commendation_rankings', `commendations,${standing}`, membershipId, signal)
   ]);
@@ -49,8 +49,8 @@ function recognitionCard(name, row, rawValue, unit, floor, unavailable) {
 }
 
 function metricEvidence(metric) {
-  if (metric.events?.length) return metric.events.map(event => event.name).join(', ');
-  if (metric.families != null) return `${n(metric.value)} completions across ${n(metric.families)} activity families`;
+  if (metric.events?.length) return metric.events.filter(event => !event.tier).map(event => event.name).join(', ');
+  if (metric.families != null && metric.value != null) return `${n(metric.value)} completions across ${n(metric.families)} activity families`;
   if (metric.unit === 'K/D') {
     if (metric.matches === 0 && metric.points === 0) return 'No recorded matches';
     if (metric.kills != null && metric.deaths != null) {
@@ -61,15 +61,27 @@ function metricEvidence(metric) {
   return metric.value == null ? 'Public evidence unavailable' : `${n(metric.value, 2)} ${metric.unit}`;
 }
 
+function metricBreakdown(metric) {
+  if (metric.activities?.length) {
+    return `<details><summary>Points by activity</summary><ul>${metric.activities.map(activity =>
+      `<li>${e(activity.name)} · ${n(activity.completions)} clears · ${n(activity.points, 2)} points</li>`).join('')}</ul></details>`;
+  }
+  if (metric.events?.some(event => event.tier)) {
+    return `<ul>${metric.events.map(event =>
+      `<li>${e(event.name)} · ${e(event.tier)} · ${n(event.points)} points</li>`).join('')}</ul>`;
+  }
+  return '';
+}
+
 export function drawPerformanceRating(target, { standing, summary, onCompare, onRefresh }) {
   const row = standing.performance;
   const metrics = row?.metrics || [];
   const groups = [...new Set(metrics.map(metric => metric.group))];
-  const result = row?.points == null ? 'Unrated' : `${n(row.points)} points`;
+  const result = row?.points == null ? 'Unrated' : `${n(row.points, 2)} points`;
   let status = 'Waiting for a verified cloud score.';
   if (standing.performanceUnavailable) status = 'Performance data is temporarily unavailable.';
   else if (row?.points == null && row) status = 'Some required public evidence is unavailable.';
-  else if (row && !row.eligible) status = 'Earn 20 recorded raid or dungeon completions, enter 100 Crucible matches, or verify a contest clear to qualify.';
+  else if (row && !row.eligible) status = 'Qualify with 20 recorded raid, dungeon or Grandmaster clears, 100 Crucible matches, or one verified contest or solo dungeon clear.';
   else if (row?.eligible) status = cohortDescription(row, '');
   target.innerHTML = `<p class="eyebrow">GUARDIAN PERFORMANCE · ${PERFORMANCE_VERSION}</p><h3>Performance rating</h3>
     <div class="report-actions"><button class="rating-compare" type="button">Compare with another Guardian</button>
@@ -87,14 +99,17 @@ export function drawPerformanceRating(target, { standing, summary, onCompare, on
     ${groups.map(group => `<section class="rating-metric-group"><h4>${e(group)}</h4><div class="rating-metric-grid">
       ${metrics.filter(metric => metric.group === group).map(metric => `<article class="rating-metric">
         <div class="rating-metric-heading"><h4>${e(metric.name)}</h4></div>
-        <div class="metric-rating-score">${metric.points == null ? 'Unavailable' : `${n(metric.points)} <small>points</small>`}</div>
-        ${note(metricEvidence(metric))}
+        <div class="metric-rating-score">${metric.points == null ? 'Unavailable' : `${n(metric.points, 2)} <small>points</small>`}</div>
+        ${metric.id !== 'dungeonSolo' || !metric.events?.length ? note(metricEvidence(metric)) : ''}
+        ${metricBreakdown(metric)}
         ${metric.id === 'competitivePeak' ? note('Highest public division score observed by Guardian Ranker since tracking began.') : ''}
         ${metric.id === 'recentKd' ? note('Latest 25 returned Crucible matches in the last 30 days.') : ''}
       </article>`).join('')}
     </div></section>`).join('')}
     <details class="rating-methodology"><summary>How points and standings work</summary>
-      <p>Different activities earn first completion credit. Repeats earn 2 points for the first 25 per activity type, then 1 point per repeat through the 100th. Ordinary counters can include checkpoints. Each verified contest raid awards 250 points and each verified contest dungeon awards 200.</p>
+      <p>The first clear of each raid, dungeon, named Grandmaster Nightfall and Solo Ops mission earns the most. Each subsequent clear of that same activity earns less than the previous one. The same rule applies to repeat Trials flawless passages. Aggregate completions can include checkpoints.</p>
+      <p>Each verified contest raid awards 250 points and each verified contest dungeon awards 200. In each dungeon, a verified solo clear earns 50 points and a solo flawless earns 120. Only the strongest verified solo tier earns credit.</p>
+      <p>Time played and aggregate fastest times carry zero points. Speed would require a verified full run and a comparable difficulty and ruleset.</p>
       <p>Crucible points come from the best observed Competitive score, Trials flawless passages, and K/D over lifetime and recent matches. Recent and lifetime K/D use different sample adjustments.</p>
       <p>Standings use fresh public snapshots of tracked, eligible Guardians. Each percentile shows the share of its cohort at or below the player’s score. Knowledge and commendations have their own cohorts.</p>
     </details>`;

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { calculatePerformance, competitiveEvidence, contestEvidence, recentKdEvidence, TRIALS_TRACKERS, COMPETITIVE_PROGRESSION } from '../performanceRating.js';
-import { createPerformanceRunner } from '../worker/performance.mjs';
+import { compactPerformanceActivities, createPerformanceRunner, PERFORMANCE_CATALOG_PROJECTION } from '../worker/performance.mjs';
+import { diminishingPoints, DUNGEON_SOLO_RECORDS } from '../activityCredit.js';
 
 const stats = values => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { basic: { value } }]));
 const now = new Date('2026-11-19T16:00:00Z');
@@ -24,24 +25,72 @@ function fixture() {
 }
 const metric = (rating, id) => rating.metrics.find(row => row.id === id);
 
-test('ordinary repeats contribute little, cap, and each different contest event earns full credit', () => {
+test('ordinary repeats decline toward a small amount and each different contest earns full credit', () => {
   const f = fixture();
   const first = calculatePerformance(f);
   f.aggregates[0].activities[0].values.activityCompletions.basic.value++;
-  assert.equal(calculatePerformance(f).points, first.points + 1);
+  assert.ok(calculatePerformance(f).points - first.points < .01);
   f.aggregates[0].activities[0].values.activityCompletions.basic.value = 101;
-  const capped = calculatePerformance(f);
+  const hundred = calculatePerformance(f);
   f.aggregates[0].activities[0].values.activityCompletions.basic.value = 10001;
-  assert.equal(calculatePerformance(f).points, capped.points);
+  const farmed = calculatePerformance(f);
+  assert.ok(farmed.points > hundred.points && farmed.points - hundred.points < .04);
   Object.assign(f.profile.profileRecords.data.records, {
     922211732: { state: 1 }, 2699580344: { state: 1 }, 781401026: { state: 1 },
     1519202867: { state: 4 }, 1136171205: { state: 0, objectives: [{ complete: false }] }
   });
   f.profile.characterRecords = { data: { 1: { records: { 922211732: { state: 1 } } } } };
   const contested = calculatePerformance(f);
-  assert.equal(contested.points - capped.points, 700);
+  assert.ok(Math.abs(contested.points - farmed.points - 700) < 1e-7);
   assert.equal(metric(contested, 'raidContest').value, 2);
   assert.equal(metric(contested, 'dungeonContest').value, 1);
+});
+
+test('every repeat earns less than its predecessor, and a new raid is worth more than farming', () => {
+  const gains = Array.from({ length: 200 }, (_, i) => diminishingPoints(i+1, 15, 4) - diminishingPoints(i, 15, 4));
+  assert.equal(gains[0], 15);
+  assert.equal(gains[1], 2);
+  assert.ok(gains.every((gain, index) => gain > 0 && (index === 0 || gain < gains[index - 1])));
+  const f = fixture();
+  const one = calculatePerformance(f);
+  f.activityDefinitions[11] = { activityModeTypes: [4], displayProperties: { name: 'Different Raid' } };
+  f.aggregates[0].activities[0].values.activityCompletions.basic.value--;
+  f.aggregates[0].activities.push({ activityHash: 11, values: stats({ activityCompletions: 1 }) });
+  const two = calculatePerformance(f);
+  assert.equal(metric(one, 'raidClears').value, metric(two, 'raidClears').value);
+  assert.ok(two.points - one.points > 14.9);
+});
+
+test('solo flawless replaces solo in the same dungeon but a different dungeon still counts', () => {
+  const f = fixture();
+  const [one, two] = DUNGEON_SOLO_RECORDS;
+  const records = f.profile.profileRecords.data.records;
+  records[one.solo] = { state: 1 };
+  assert.equal(metric(calculatePerformance(f), 'dungeonSolo').points, 50);
+  records[one.flawless] = { state: 1 };
+  assert.deepEqual(metric(calculatePerformance(f), 'dungeonSolo').events, [{ name: one.name, tier: 'Solo flawless', points: 120 }]);
+  records[two.solo] = { state: 1 };
+  records[two.flawless] = { state: 4 };
+  assert.equal(metric(calculatePerformance(f), 'dungeonSolo').points, 170);
+});
+
+test('Grandmaster variants share one curve and only named single-player Solo Ops are counted', () => {
+  const f = fixture(), grandmaster = { directActivityModeType: 46, activityTypeHash: 575572995, displayProperties: { name: 'Nightfall Grandmaster: The Glassway' } };
+  Object.assign(f.activityDefinitions, {
+    11: grandmaster, 12: grandmaster,
+    13: { ...grandmaster, displayProperties: { name: 'Nightfall Grandmaster' } },
+    14: { activityTypeHash: 3851289711, matchmaking: { maxParty: 1 }, displayProperties: { name: 'Caldera: Customize' }, originalDisplayProperties: { name: 'Caldera' } },
+    15: { activityTypeHash: 3851289711, matchmaking: { maxParty: 3 }, displayProperties: { name: 'Other Activity' } }
+  });
+  f.aggregates[0].activities.push(...[11, 12, 13, 14, 15].map(activityHash => ({ activityHash, values: stats({ activityCompletions: 1 }) })));
+  const full = calculatePerformance(f);
+  assert.deepEqual(metric(full, 'grandmasterClears').activities, [{ name: 'The Glassway', completions: 2, points: 12 }]);
+  assert.deepEqual(metric(full, 'soloOpsClears').activities, [{ name: 'Caldera', completions: 1, points: 3 }]);
+  const compact = calculatePerformance({ ...f, activityDefinitions: compactPerformanceActivities(f.activityDefinitions) });
+  assert.deepEqual(compact.metrics, full.metrics);
+  f.profile.characters.data[1].minutesPlayedTotal = '999999';
+  f.aggregates[0].activities[1].values = stats({ activityCompletions: 1, activitySecondsPlayed: 999999, fastestCompletionMsForActivity: 123 });
+  assert.equal(calculatePerformance(f).points, full.points);
 });
 
 test('win rate, precision, Triumph score and commendation score earn no performance points', () => {
@@ -92,7 +141,7 @@ test('cloud performance reuses the shared activity catalog and saves exact publi
   const f = fixture(), saved = [];
   const store = {
     duePerformance: async () => [{ membership_id: '123', membership_type: 3, competitive_peak: 4700 }],
-    performanceCatalog: async () => ({ checked_at: now.toISOString(), activities: f.activityDefinitions }),
+    performanceCatalog: async () => ({ checked_at: now.toISOString(), projection: PERFORMANCE_CATALOG_PROJECTION, activities: f.activityDefinitions }),
     savePerformance: async (...row) => saved.push(row)
   };
   const paths = [];

@@ -9,7 +9,7 @@ export function formatPlaytime(value) {
 }
 
 const boards = {
-  rating: { source: 'guardian_performance_rankings', score: 'points', fields: ['points', 'percentile'], body: 'account-rating-body', button: 'toggleAccountRatingBtn' },
+  rating: { source: 'guardian_activity_rankings', score: 'points', fields: ['points', 'percentile'], body: 'account-rating-body', button: 'toggleAccountRatingBtn' },
   triumph: { source: 'guardian_knowledge_rankings', score: 'triumph_score', fields: ['triumph_score', 'percentile'], body: 'leaderboard-body', button: 'toggleLeaderboardBtn' },
   commendations: { source: 'guardian_commendation_rankings', score: 'commendations', fields: ['commendations', 'percentile'], body: 'commendation-body', button: 'toggleCommendationsBtn' },
   guardian: { table: 'leaderboard', score: 'guardian_rank', fields: ['guardian_rank'], body: 'guardian-rank-body', button: 'toggleGuardianRankBtn' },

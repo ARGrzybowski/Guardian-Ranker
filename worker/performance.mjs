@@ -1,10 +1,21 @@
 import { loadPlayerProfile } from '../bungieApi.js';
 import { calculatePerformance, PERFORMANCE_COMPONENTS, RECENT_MATCH_LIMIT } from '../performanceRating.js';
+import { additionalActivityFamily } from '../activityCredit.js';
 import { BudgetReached } from './indexer.mjs';
 import { compactActivities } from './ratings.mjs';
 
 export const PERFORMANCE_BATCH_LIMIT = 4;
+export const PERFORMANCE_CATALOG_PROJECTION = 2;
 const hoursAfter = (date, hours) => new Date(date.getTime() + hours * 3600000).toISOString();
+
+export function compactPerformanceActivities(definitions) {
+  const activities = compactActivities(definitions);
+  for (const [hash, definition] of Object.entries(definitions)) {
+    const family = additionalActivityFamily(definition);
+    if (family) activities[hash] = { ...activities[hash], performanceFamily: family };
+  }
+  return activities;
+}
 
 export function createPerformanceRunner() {
   let cachedCatalog;
@@ -14,13 +25,14 @@ export function createPerformanceRunner() {
     if (!rows.length) return summary;
     const request = bungie.request.bind(bungie);
     let catalog = cachedCatalog || await store.performanceCatalog();
-    if (!catalog || now().getTime() - Date.parse(catalog.checked_at) >= 86400000) {
+    const outOfDate = catalog?.projection !== PERFORMANCE_CATALOG_PROJECTION;
+    if (outOfDate || now().getTime() - Date.parse(catalog.checked_at) >= 86400000) {
       const metadata = (await request('/Destiny2/Manifest/')).Response;
       if (!metadata?.version) throw new Error('Activity catalog metadata is unavailable.');
-      const needsDownload = catalog?.version !== metadata.version || !catalog.activities;
-      const activities = needsDownload ? compactActivities(await bungie.staticJson(metadata.jsonWorldComponentContentPaths?.en?.DestinyActivityDefinition)) : catalog.activities;
+      const needsDownload = outOfDate || catalog.version !== metadata.version || !catalog.activities;
+      const activities = needsDownload ? compactPerformanceActivities(await bungie.staticJson(metadata.jsonWorldComponentContentPaths?.en?.DestinyActivityDefinition)) : catalog.activities;
       if (!Object.keys(activities).length) throw new Error('Endgame catalog is empty.');
-      catalog = { version: metadata.version, activities, checked_at: now().toISOString() };
+      catalog = { version: metadata.version, projection: PERFORMANCE_CATALOG_PROJECTION, activities, checked_at: now().toISOString() };
       await store.savePerformanceCatalog(catalog);
       cachedCatalog = catalog;
       if (needsDownload) return { ...summary, rating_manifest_prepared: 1 };
