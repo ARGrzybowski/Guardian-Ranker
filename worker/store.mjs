@@ -72,6 +72,30 @@ export class IndexStore {
   failRating(row, nextRating, isPrivate) {
     return this.rpc('fail_guardian_rating', { p_id: row.membership_id, p_next: nextRating, p_private: isPrivate });
   }
+  duePerformance(now, limit) {
+    return this.rpc('get_guardian_performance_due', { p_now: now, p_limit: limit });
+  }
+  async performanceCatalog() {
+    return (await this.select('guardian_performance_catalog', { select: 'payload', singleton: 'eq.true' }))[0]?.payload;
+  }
+  savePerformanceCatalog(payload) {
+    return this.request('guardian_performance_catalog?on_conflict=singleton', {
+      method: 'POST', body: { singleton: true, payload }, prefer: 'resolution=merge-duplicates,return=minimal'
+    });
+  }
+  savePerformance(id, rating, nextRating) {
+    return this.request('guardian_performance?on_conflict=membership_id', {
+      method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal',
+      body: {
+        membership_id: id, rating_version: rating.version, points: rating.points, eligible: rating.eligible,
+        metrics: rating.metrics, competitive_peak: rating.competitivePeak, commendations: rating.commendations,
+        last_rated_at: rating.calculatedAt, next_rating_at: nextRating, consecutive_errors: 0
+      }
+    });
+  }
+  failPerformance(id, nextRating, isPrivate) {
+    return this.rpc('fail_guardian_performance', { p_id: id, p_next: nextRating, p_private: isPrivate });
+  }
   save(requestedId, snapshot, nextRefresh) {
     return this.rpc('save_guardian_snapshot', { p_requested_id: requestedId, p_snapshot: snapshot, p_next_refresh_at: nextRefresh });
   }

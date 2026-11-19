@@ -5,7 +5,7 @@ The report aims to expose a useful, inspectable account dossier from public Bung
 | Section | Available features |
 | --- | --- |
 | Overview | Current, renewed, and highest Guardian Rank; highest equipped power; lifetime/active Triumph score; surviving-character playtime; last played; collection counts; linked memberships and cross-save; clan identity, motto, membership size, founding date, and description |
-| Account rating | Ten weighted 0–100 metric ratings, a 0–1,000 overall rating, grades, evidence coverage, partial-data bounds, next milestones, and an inspectable versioned methodology; direct `#rating` links |
+| Account rating | Performance points, cohort rank and percentile, supporting evidence, and separate Knowledge and commendation standings. Direct `#rating` links. |
 | Characters & gear | Each character's power, race, equipped title, combat stats, equipped item names/types/power/damage, descriptions, equipped perks/mods, and detailed item stats on request |
 | PvP & PvE | Account-wide career kills/deaths/assists, K/D, efficiency, wins, activity counts, win rate, precision kills, streak, activity time, and available weapon kill breakdown; additional character/mode statistics |
 | Activity history | All-character or individual-character history; mode filters including raids, dungeons, Nightfalls, Trials and Gambit; older pages; deduplication; partial-page retry; loaded-history combat summary and daily/mode distribution; participant match reports, weapon breakdowns, and links to other Guardians |
@@ -13,7 +13,7 @@ The report aims to expose a useful, inspectable account dossier from public Bung
 | Triumphs & titles | Search every exposed triumph by name/description; completed/incomplete/redeemed states; objective counters and normalized progress; closest incomplete triumph ordering; filter equippable titles; obscured triumph handling |
 | Collections | Search exposed collectible names/descriptions and acquisition sources; acquired/missing filters; profile and character state merge |
 | Progression & metrics | Named public reputation/progression counters, levels, next-level progress and resets; searchable named Bungie metric counters; commendation total and category scores/percentages |
-| Comparison | Compare two players’ overall rating, five dimensions, 18 metric scores, weighted point differences, and raw profile statistics. Share a link that opens both accounts. |
+| Comparison | Compare point contributions, cohort percentiles, and raw profile statistics. Share a link that opens both accounts. |
 | Sharing | Stable `?name=Guardian%231234` URLs; copy link; print loaded content; JSON export with retrieval time, schema version, profile response, and loaded sections |
 
 ## Sources and semantics

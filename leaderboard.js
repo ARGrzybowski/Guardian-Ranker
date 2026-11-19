@@ -1,5 +1,5 @@
 import { getDatabase } from './database.js';
-import { RATING_VERSION } from './accountRating.js';
+import { PERFORMANCE_VERSION } from './performanceRating.js';
 
 export function formatPlaytime(value) {
   if (value == null) return 'Unavailable';
@@ -9,8 +9,9 @@ export function formatPlaytime(value) {
 }
 
 const boards = {
-  rating: { source: 'guardian_rating_rankings', score: 'account_rating', fields: ['account_rating','rating_grade'], body: 'account-rating-body', button: 'toggleAccountRatingBtn' },
-  triumph: { table: 'leaderboard', score: 'triumph_score', fields: ['triumph_score'], body: 'leaderboard-body', button: 'toggleLeaderboardBtn' },
+  rating: { source: 'guardian_performance_rankings', score: 'points', fields: ['points', 'percentile'], body: 'account-rating-body', button: 'toggleAccountRatingBtn' },
+  triumph: { source: 'guardian_knowledge_rankings', score: 'triumph_score', fields: ['triumph_score', 'percentile'], body: 'leaderboard-body', button: 'toggleLeaderboardBtn' },
+  commendations: { source: 'guardian_commendation_rankings', score: 'commendations', fields: ['commendations', 'percentile'], body: 'commendation-body', button: 'toggleCommendationsBtn' },
   guardian: { table: 'leaderboard', score: 'guardian_rank', fields: ['guardian_rank'], body: 'guardian-rank-body', button: 'toggleGuardianRankBtn' },
   power: { table: 'highest_character', score: 'light_level', fields: ['class_type', 'light_level'], body: 'highest-character-body', button: 'toggleHighestCharacterBtn' },
   time: { table: 'leaderboard', score: 'time_played_hours', fields: ['time_played_hours'], body: 'time-played-body', button: 'toggleTimePlayedBtn' }
@@ -26,7 +27,7 @@ function renderBoard(board, errorMessage) {
     const tr = document.createElement('tr');
     if (row.last_refreshed_at) tr.title = `Refreshed ${new Date(row.last_refreshed_at).toLocaleString()}`;
     const rank = document.createElement('td');
-    rank.textContent = index + 1;
+    rank.textContent = row.standing ?? index + 1;
     tr.appendChild(rank);
     const nameCell = document.createElement('td');
     const link = document.createElement('a');
@@ -38,7 +39,10 @@ function renderBoard(board, errorMessage) {
     tr.appendChild(nameCell);
     for (const field of board.fields) {
       const td = document.createElement('td');
-      td.textContent = field === 'account_rating' ? row[field] == null ? 'Unavailable' : `${(Math.floor(Number(row[field])*10)/10).toLocaleString()} / 1,000` : field === 'time_played_hours' ? formatPlaytime(row[field]) : row[field] ?? 'Unavailable';
+      const value = row[field];
+      if (field === 'time_played_hours') td.textContent = formatPlaytime(value);
+      else if (board.source) td.textContent = value == null ? '—' : Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+      else td.textContent = value ?? 'Unavailable';
       tr.appendChild(td);
     }
     tbody.appendChild(tr);
@@ -47,7 +51,7 @@ function renderBoard(board, errorMessage) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = board.fields.length + 2;
-    td.textContent = errorMessage || (board.source ? 'Cloud account ratings are being populated. Check back shortly.' : 'No players saved yet.');
+    td.textContent = errorMessage || (board.source ? 'Waiting for eligible cloud results.' : 'No players saved yet.');
     tr.appendChild(td);
     tbody.appendChild(tr);
   }
@@ -55,6 +59,11 @@ function renderBoard(board, errorMessage) {
   if (button) {
     button.textContent = board.showAll ? 'Show Less' : 'Show More';
     button.setAttribute('aria-expanded', String(board.showAll));
+  }
+  const ratingStatus = board === boards.rating && document.getElementById('rating-index-status');
+  if (ratingStatus) {
+    const count = Number(board.rows[0]?.cohort_size ?? board.rows.length);
+    ratingStatus.textContent = errorMessage || `${count.toLocaleString()} eligible Guardians with verified ${PERFORMANCE_VERSION} points. ${count < 30 ? 'Percentiles open when 30 qualify.' : 'Percentiles reflect this tracked group.'}`;
   }
   document.dispatchEvent(new Event('leaderboards:rendered'));
 }
@@ -69,7 +78,7 @@ async function loadBoard(board) {
     const pageSize = 1000;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await getDatabase().from(table)
-        .select(['membership_id', 'bungie_name', ...board.fields, ...(table.startsWith('guardian_') ? ['last_refreshed_at'] : [])].join(','))
+        .select(['membership_id', 'bungie_name', ...board.fields, ...(board.source ? ['standing', 'cohort_size'] : []), ...(table.startsWith('guardian_') ? ['last_refreshed_at'] : [])].join(','))
         .order(board.score, { ascending: false, nullsFirst: false })
         .order('membership_id', { ascending: true })
         .range(offset, offset + pageSize - 1);
@@ -115,8 +124,6 @@ export async function loadIndexStatus() {
     const updated = data.last_refreshed_at ? ` Latest profile refresh: ${new Date(data.last_refreshed_at).toLocaleString()}.` : ' Waiting for the first cloud refresh.';
     const freshness = data.fresh_24h_count == null ? '' : ` ${Number(data.fresh_24h_count).toLocaleString()} updated in 24 hours; ${Number(data.due_count).toLocaleString()} due for refresh.`;
     element.textContent = `${count.toLocaleString()} indexed Guardians; ${queued.toLocaleString()} waiting for a public profile.${freshness} Rankings cover tracked accounts.${updated}`;
-    const ratingStatus = document.getElementById('rating-index-status');
-    if (ratingStatus) ratingStatus.textContent = `${Number(data.rating_indexed_count || 0).toLocaleString()} cloud-verified ${RATING_VERSION} ratings; ${Number(data.rating_due_count || 0).toLocaleString()} awaiting calculation or refresh. Complete public ratings only. ${data.rating_last_updated_at ? `Latest rating: ${new Date(data.rating_last_updated_at).toLocaleString()}.` : 'Initial backfill is running.'}`;
   } catch {
     element.textContent = 'Leaderboard coverage is temporarily unavailable.';
   }
