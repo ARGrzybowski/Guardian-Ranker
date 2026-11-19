@@ -14,6 +14,7 @@
 - **Player Stat Search:** Find and view detailed stats for any Destiny 2 player.
 - **Player dossier:** Ten sections covering account overview/rating, characters and equipped gear/perks/stats, career PvP/PvE statistics, mode-specific statistics, paginated activity history and match reports, aggregate activity records, searchable triumphs/titles, collections, reputation/metrics/commendations, and player comparison.
 - **Guardian Performance:** Verified raid, dungeon and Crucible evidence earns points. The leaderboard shows standings and percentiles among eligible tracked accounts. Knowledge and commendations have separate standings. [Scoring methodology](docs/account-rating.md).
+- **Leaderboard directory:** Filter 30 built-in specialty boards, plus individual activity boards added as verified results arrive. Open a board or look up a Guardian by exact Bungie name to see their standing.
 - **Rating comparison:** Compare the metrics behind two Guardians’ point gap, their cohort percentiles, and their raw profile stats. Share a link that opens both accounts.
 - **Deeper analysis:** Raid/dungeon activity counters and fastest completions, loaded-history K/D and daily/mode summaries, match weapon breakdowns, closest incomplete triumphs, collectible acquisition sources, and filtered activity-record CSV export.
 - **Share and export:** Stable player links, printable loaded sections, and JSON export of the public profile and loaded report data.
