@@ -92,4 +92,7 @@ try {
     commendationsVisible: Boolean(profile.profileCommendations?.data),
     itemStatsVisible: Boolean(profile.itemComponents?.stats?.data)
   }));
+} catch (error) {
+  if (error.message !== 'This system is temporarily disabled for maintenance.') throw error;
+  console.log('::notice::Live Bungie verification deferred because the API reported maintenance.');
 } finally { clearTimeout(timeout); }

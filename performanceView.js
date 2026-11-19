@@ -23,7 +23,7 @@ export async function loadGuardianStandings(membershipId, signal) {
   signal.throwIfAborted();
   const read = index => result[index].status === 'fulfilled' ? result[index].value : null;
   return {
-    version: PERFORMANCE_VERSION, performance: read(0), knowledge: read(1), commendations: read(2),
+    version: read(0)?.rating_version ?? PERFORMANCE_VERSION, performance: read(0), knowledge: read(1), commendations: read(2),
     performanceUnavailable: result[0].status !== 'fulfilled',
     knowledgeUnavailable: result[1].status !== 'fulfilled',
     commendationsUnavailable: result[2].status !== 'fulfilled'
@@ -75,6 +75,7 @@ function metricBreakdown(metric) {
 
 export function drawPerformanceRating(target, { standing, summary, onCompare, onRefresh }) {
   const row = standing.performance;
+  const previousModel = row && row.rating_version !== PERFORMANCE_VERSION;
   const metrics = row?.metrics || [];
   const groups = [...new Set(metrics.map(metric => metric.group))];
   const result = row?.points == null ? 'Unrated' : `${n(row.points, 2)} points`;
@@ -83,7 +84,8 @@ export function drawPerformanceRating(target, { standing, summary, onCompare, on
   else if (row?.points == null && row) status = 'Some required public evidence is unavailable.';
   else if (row && !row.eligible) status = 'Qualify with 20 recorded raid, dungeon or Grandmaster clears, 100 Crucible matches, or one verified contest or solo dungeon clear.';
   else if (row?.eligible) status = cohortDescription(row, '');
-  target.innerHTML = `<p class="eyebrow">GUARDIAN PERFORMANCE · ${PERFORMANCE_VERSION}</p><h3>Performance rating</h3>
+  target.innerHTML = `<p class="eyebrow">GUARDIAN PERFORMANCE · ${e(standing.version)}</p><h3>Performance rating</h3>
+    ${previousModel ? note('Showing the prior scoring model while the revised standings collect 30 verified eligible accounts.') : ''}
     <div class="report-actions"><button class="rating-compare" type="button">Compare with another Guardian</button>
     <button class="rating-refresh" type="button">Refresh standings</button></div>
     <div class="rating-hero"><div><p class="rating-label">Overall performance</p><div class="overall-rating-score">${e(result)}</div>
@@ -106,13 +108,13 @@ export function drawPerformanceRating(target, { standing, summary, onCompare, on
         ${metric.id === 'recentKd' ? note('Latest 25 returned Crucible matches in the last 30 days.') : ''}
       </article>`).join('')}
     </div></section>`).join('')}
-    <details class="rating-methodology"><summary>How points and standings work</summary>
+    ${!previousModel ? `<details class="rating-methodology"><summary>How points and standings work</summary>
       <p>The first clear of each raid, dungeon, named Grandmaster Nightfall and Solo Ops mission earns the most. Each subsequent clear of that same activity earns less than the previous one. The same rule applies to repeat Trials flawless passages. Aggregate completions can include checkpoints.</p>
       <p>Each verified contest raid awards 250 points and each verified contest dungeon awards 200. In each dungeon, a verified solo clear earns 50 points and a solo flawless earns 120. Only the strongest verified solo tier earns credit.</p>
       <p>Time played and aggregate fastest times carry zero points. Speed would require a verified full run and a comparable difficulty and ruleset.</p>
       <p>Crucible points come from the best observed Competitive score, Trials flawless passages, and K/D over lifetime and recent matches. Recent and lifetime K/D use different sample adjustments.</p>
       <p>Standings use fresh public snapshots of tracked, eligible Guardians. Each percentile shows the share of its cohort at or below the player’s score. Knowledge and commendations have their own cohorts.</p>
-    </details>`;
+    </details>` : ''}`;
   target.querySelector('.rating-compare').addEventListener('click', onCompare);
   target.querySelector('.rating-refresh').addEventListener('click', onRefresh);
 }

@@ -63,7 +63,9 @@ function renderBoard(board, errorMessage) {
   const ratingStatus = board === boards.rating && document.getElementById('rating-index-status');
   if (ratingStatus) {
     const count = Number(board.rows[0]?.cohort_size ?? board.rows.length);
-    ratingStatus.textContent = errorMessage || `${count.toLocaleString()} eligible Guardians with verified ${PERFORMANCE_VERSION} points. ${count < 30 ? 'Percentiles open when 30 qualify.' : 'Percentiles reflect this tracked group.'}`;
+    const version = board.rows[0]?.rating_version ?? PERFORMANCE_VERSION;
+    const state = version !== PERFORMANCE_VERSION ? 'The revised model is collecting 30 eligible scores.' : count < 30 ? 'Percentiles open when 30 qualify.' : 'Percentiles reflect this tracked group.';
+    ratingStatus.textContent = errorMessage || `${count.toLocaleString()} eligible Guardians with verified ${version} points. ${state}`;
   }
   document.dispatchEvent(new Event('leaderboards:rendered'));
 }
@@ -78,7 +80,7 @@ async function loadBoard(board) {
     const pageSize = 1000;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await getDatabase().from(table)
-        .select(['membership_id', 'bungie_name', ...board.fields, ...(board.source ? ['standing', 'cohort_size'] : []), ...(table.startsWith('guardian_') ? ['last_refreshed_at'] : [])].join(','))
+        .select(['membership_id', 'bungie_name', ...board.fields, ...(board.source ? ['standing', 'cohort_size'] : []), ...(board === boards.rating ? ['rating_version'] : []), ...(table.startsWith('guardian_') ? ['last_refreshed_at'] : [])].join(','))
         .order(board.score, { ascending: false, nullsFirst: false })
         .order('membership_id', { ascending: true })
         .range(offset, offset + pageSize - 1);
