@@ -7,15 +7,16 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="page-header">
-  <a href="index.html" class="back-link">← Back</a>
-  <h1>Guardian Ranker</h1>
-</div>
+  <main class="main-container leaderboard-page">
+    <header class="page-header">
+      <a href="index.html" class="back-link">← Back</a>
+      <h1>Guardian Ranker</h1>
+    </header>
     <section class="board-directory" id="discover" aria-labelledby="discover-title">
       <h2 id="discover-title">Explore leaderboards</h2>
       <div class="board-directory-controls" hidden>
-        <label>Category <select id="board-category"><option value="">All categories</option></select></label>
-        <label>Filter boards <input id="board-filter" type="search" placeholder="Raid, dungeon, Trials…" autocomplete="off" /></label>
+        <label>Category <select id="board-category"><option value="">All</option></select></label>
+        <label>Filter boards <input id="board-filter" type="search" placeholder="e.g. Trials" autocomplete="off" /></label>
         <label>Leaderboard <select id="board-choice"></select></label>
       </div>
       <p id="board-directory-status" class="board-directory-note" role="status">Loading leaderboards…</p>
@@ -39,20 +40,15 @@
         </div>
       </div>
     </section>
-<p>Find a Guardian in the featured leaderboards</p>
-
-
-    <!-- Search Bar -->
-    <div class="search-container">
-      <input type="text" id="leaderboardSearch" placeholder="Guardian#1234" autocomplete="off" aria-label="Bungie name" />
-      <button id="leaderboardSearchBtn" title="Search" aria-label="Find guardian in leaderboards">➤</button>
-    </div>
-
-    <!-- Results -->
-    <ul id="suggestions"></ul>
-
-    <!-- Leaderboards -->
     <h2>Featured leaderboards</h2>
+    <div class="search-layout">
+      <label class="search-label" for="leaderboardSearch">Find a Guardian in the featured leaderboards</label>
+      <div class="search-container">
+        <input type="text" id="leaderboardSearch" placeholder="Guardian#1234" autocomplete="off" />
+        <button id="leaderboardSearchBtn" type="button">Find player</button>
+      </div>
+      <ul id="suggestions"></ul>
+    </div>
     <p id="index-status" role="status" class="index-status">Checking leaderboard coverage...</p>
 
     <div class="leaderboards-container">
@@ -71,7 +67,7 @@
               <th>Rank</th>
               <th>Bungie Name</th>
               <th>Class</th>
-              <th>Power Level</th>
+              <th>Power</th>
             </tr>
           </thead>
           <tbody id="highest-character-body"></tbody>
@@ -88,7 +84,7 @@
             <tr>
               <th>Rank</th>
               <th>Bungie Name</th>
-              <th>Triumph Score</th>
+              <th>Triumphs</th>
               <th>Percentile</th>
             </tr>
           </thead>
@@ -99,7 +95,7 @@
       <section class="leaderboard-section">
         <h2>Commendations</h2>
         <p class="index-status">Lifetime Rank 7+ and 500+ commendation score.</p>
-        <table class="styled-table"><thead><tr><th>Rank</th><th>Bungie Name</th><th>Commendations</th><th>Percentile</th></tr></thead><tbody id="commendation-body"></tbody></table>
+        <table class="styled-table"><thead><tr><th>Rank</th><th>Bungie Name</th><th>Score</th><th>Percentile</th></tr></thead><tbody id="commendation-body"></tbody></table>
         <button id="toggleCommendationsBtn">Show More</button>
       </section>
       <!-- Time played Leaderboard -->
@@ -134,6 +130,7 @@
         <button id="toggleGuardianRankBtn">Show More</button>
       </section>
     </div>
+  </main>
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="leaderboard.js"></script>

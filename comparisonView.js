@@ -3,6 +3,7 @@ import { overviewStats } from './reportData.js';
 import { bestCrucibleSeasonText, loadGuardianStandings } from './performanceView.js';
 import { PERFORMANCE_METRICS } from './performanceRating.js';
 import { escapeHtml as e } from './html.js';
+import { reportTable } from './reportTables.js';
 
 const measurements = {
   rank: 'Guardian Rank', highestRank: 'Highest Guardian Rank', power: 'Highest equipped power',
@@ -17,9 +18,7 @@ const gapFormat = new Intl.NumberFormat(undefined, {
 const gap = value => value == null ? '—' : gapFormat.format(value);
 
 function table(caption, left, right, gapLabel, rows) {
-  return `<div class="report-table-wrap"><table class="report-table"><caption>${e(caption)}</caption><thead><tr>
-    <th scope="col">Measurement</th><th scope="col">${e(left)}</th><th scope="col">${e(right)}</th><th scope="col">${e(gapLabel)}</th>
-    </tr></thead><tbody>${rows}</tbody></table></div>`;
+  return reportTable(['Measurement', left, right, gapLabel], rows, { caption, comparison: true });
 }
 
 function ratingComparison(primary, other, leftStanding, rightStanding) {
@@ -37,21 +36,22 @@ function ratingComparison(primary, other, leftStanding, rightStanding) {
   const largest = rows.filter(row => row.difference).sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference)).slice(0, 3);
   const listedGaps = largest.map(row =>
     `<li>${e(row.name)} · ${number(Math.abs(row.difference), 2)} points in favor of ${e(row.difference > 0 ? primary : other)}</li>`).join('');
-  const metrics = rows.map(row => `<tr><th scope="row">${e(row.name)}</th><td>${number(row.primary, 2)}</td><td>${number(row.compared, 2)}</td><td>${gap(row.difference)}</td></tr>`).join('');
+  const metrics = rows.map(row => [e(row.name), number(row.primary, 2), number(row.compared, 2), gap(row.difference)]);
   const season = row => bestCrucibleSeasonText(row?.metrics.find(metric => metric.id === 'seasonKd'));
-  const percentileRow = (label, a, b, differenceFn = delta) => `<tr><th scope="row">${e(label)}</th><td>${number(a?.percentile, 2)}</td><td>${number(b?.percentile, 2)}</td><td>${gap(differenceFn(a?.percentile, b?.percentile))}</td></tr>`;
+  const percentileRow = (label, a, b, differenceFn = delta) => [e(label), number(a?.percentile, 2), number(b?.percentile, 2), gap(differenceFn(a?.percentile, b?.percentile))];
   return {
     html: `<h4>Performance comparison · ${e(leftStanding.version)}</h4>
-    ${table('Points and standings among eligible Guardians', primary, other, 'First − second', `
-      <tr><th scope="row">Performance points</th><td>${number(left?.points, 2)}</td><td>${number(right?.points, 2)}</td><td>${gap(difference)}</td></tr>
-      <tr><th scope="row">Best past Crucible season</th><td>${e(season(left))}</td><td>${e(season(right))}</td><td>—</td></tr>
-      ${percentileRow('Performance percentile', left, right, performanceDelta)}
-      ${percentileRow('Knowledge percentile', leftStanding.knowledge, rightStanding.knowledge)}
-      ${percentileRow('Commendations percentile', leftStanding.commendations, rightStanding.commendations)}`)}
+    ${table('Points and standings among eligible Guardians', primary, other, 'First − second', [
+      ['Performance points', number(left?.points, 2), number(right?.points, 2), gap(difference)],
+      ['Best past Crucible season', e(season(left)), e(season(right)), '—'],
+      percentileRow('Performance percentile', left, right, performanceDelta),
+      percentileRow('Knowledge percentile', leftStanding.knowledge, rightStanding.knowledge),
+      percentileRow('Commendations percentile', leftStanding.commendations, rightStanding.commendations)
+    ])}
     ${difference == null ? '<p class="report-note">An overall gap requires verified points for both accounts under the same scoring model.</p>' : ''}
     ${listedGaps ? `<div class="compare-drivers"><h4>Largest point differences</h4><ul>${listedGaps}</ul></div>` : ''}
     <details class="report-details compare-metrics"><summary>See all performance point contributions</summary>
-      ${table('Points by metric', primary, other, 'Points (first − second)', metrics)}
+      ${table('Points by metric', primary, other, 'First − second', metrics)}
     </details>`,
     data: {
       version: leftStanding.version, overallDifference: difference,
@@ -91,8 +91,8 @@ export function renderPlayerComparison(target, { primary, loadPrimaryRating, sig
       const rows = Object.entries(measurements).map(([key, label]) => {
         const left = key === 'collectionAcquired' && !primary.summary.hasCollections ? null : primary.summary[key];
         const right = key === 'collectionAcquired' && !stats.hasCollections ? null : stats[key];
-        return `<tr><th scope="row">${e(label)}</th><td>${number(left)}</td><td>${number(right)}</td><td>${gap(left == null || right == null ? null : left - right)}</td></tr>`;
-      }).join('');
+        return [e(label), number(left), number(right), gap(left == null || right == null ? null : left - right)];
+      });
       result.innerHTML = `<div class="comparison-ratings"></div>
         <details class="report-details compare-profile" open><summary>Public profile stats</summary>
         ${table('Public profile comparison', primary.name, otherName, 'First − second', rows)}</details>

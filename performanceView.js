@@ -86,7 +86,7 @@ export function drawPerformanceRating(target, { standing, summary, onCompare, on
   const metrics = (row?.metrics || []).map(metric => metric.id === 'recentKd'
     ? PERFORMANCE_METRICS.find(entry => entry.id === 'seasonKd') : metric);
   const groups = [...new Set(metrics.map(metric => metric.group))];
-  const result = row?.points == null ? 'Unrated' : `${n(row.points, 2)} points`;
+  const result = row?.points == null ? 'Unrated' : `${e(n(row.points, 2))} <span>points</span>`;
   let status = 'Waiting for a verified cloud score.';
   if (standing.performanceUnavailable) status = 'Performance data is temporarily unavailable.';
   else if (row?.points == null && row) status = 'Some required public evidence is unavailable.';
@@ -94,10 +94,10 @@ export function drawPerformanceRating(target, { standing, summary, onCompare, on
   else if (row?.eligible) status = cohortDescription(row, '');
   target.innerHTML = `<p class="eyebrow">GUARDIAN PERFORMANCE · ${e(standing.version)}</p><h3>Performance rating</h3>
     ${previousModel ? note('Showing the prior scoring model while the revised standings collect 30 verified eligible accounts.') : ''}
-    <div class="report-actions"><button class="rating-compare" type="button">Compare with another Guardian</button>
-    <button class="rating-refresh" type="button" ${refreshing ? 'disabled' : ''}>Update score</button></div>
+    <div class="report-actions"><button class="rating-refresh" type="button" ${refreshing ? 'disabled' : ''}>Update score</button>
+    <button class="rating-compare" type="button">Compare players</button></div>
     <p class="rating-refresh-status report-note" role="status">${e(refreshMessage)}</p>
-    <div class="rating-hero"><div><p class="rating-label">Overall performance</p><div class="overall-rating-score">${e(result)}</div>
+    <div class="rating-hero"><div><p class="rating-label">Overall performance</p><div class="overall-rating-score">${result}</div>
       <p class="rating-tier">${e(status)}</p></div>
       <div class="rating-coverage">${row?.standing != null ? note(standingText(row)) : ''}
         ${row?.last_rated_at ? note(`Updated ${new Date(row.last_rated_at).toLocaleString()}`) : ''}</div>

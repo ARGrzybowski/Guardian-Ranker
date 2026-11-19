@@ -2,6 +2,7 @@ import { escapeHtml as e } from './html.js';
 import { CLASSES, ACTIVITY_MODES, numeric } from './reportData.js';
 import { mapConcurrent } from './manifest.js';
 import { activityInsights, durationText, aggregateEntries, filterAggregates, matchWeapons, csvText } from './reportInsights.js';
+import { reportTable } from './reportTables.js';
 
 const n = (value, digits = 0) => numeric(value) == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const tile = (label, value) => `<div class="report-stat"><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`;
@@ -28,13 +29,17 @@ export async function renderActivityRecords(target, { api, characters, manifest,
   signal.throwIfAborted();
   const responses = new Array(characters.length).fill(null);
   let missing = characters.map((_, i) => i), rows = [], limit = 40;
-  target.innerHTML = `<h3>Activity records & endgame</h3>${note('Bungie aggregate statistics for surviving characters. Completions can include checkpoints and are not verified full clears. Activity variants remain separate; deleted characters are excluded.')}<div class="record-coverage" aria-live="polite"></div><div class="report-filters"><label>Search activities<input class="aggregate-search" type="search" placeholder="Raid, dungeon, activity name"></label><label>Category<select class="aggregate-category">${opts({ all: 'All activities', raid: 'Raids', dungeon: 'Dungeons', nightfall: 'Nightfalls', other: 'Other' })}</select></label><label>Character<select class="aggregate-character">${opts({ all: 'All characters', ...Object.fromEntries(characters.map(c => [c.characterId, CLASSES[c.classType] || 'Guardian'])) })}</select></label><label>Sort<select class="aggregate-sort">${opts({ completions: 'Most completions', fastest: 'Fastest completion' })}</select></label><button type="button" class="aggregate-csv">Export filtered CSV</button></div><div class="aggregate-count report-note" aria-live="polite"></div><div class="aggregate-result"></div><button type="button" class="aggregate-more">Show more records</button>`;
+  target.innerHTML = `<h3>Activity records & endgame</h3>${note('Bungie aggregate statistics for surviving characters. Completions can include checkpoints and are not verified full clears. Activity variants remain separate; deleted characters are excluded.')}<div class="record-coverage" aria-live="polite"></div><div class="report-filters"><label>Search activities<input class="aggregate-search" type="search" placeholder="Activity name"></label><label>Category<select class="aggregate-category">${opts({ all: 'All activities', raid: 'Raids', dungeon: 'Dungeons', nightfall: 'Nightfalls', other: 'Other' })}</select></label><label>Character<select class="aggregate-character">${opts({ all: 'All characters', ...Object.fromEntries(characters.map(c => [c.characterId, CLASSES[c.classType] || 'Guardian'])) })}</select></label><label>Sort<select class="aggregate-sort">${opts({ completions: 'Completions', fastest: 'Fastest time' })}</select></label><button type="button" class="aggregate-csv">Export filtered CSV</button></div><div class="aggregate-count report-note" aria-live="polite"></div><div class="aggregate-result"></div><button type="button" class="aggregate-more">Show more records</button>`;
   const coverage = target.querySelector('.record-coverage');
   const selection = () => ({ query: target.querySelector('.aggregate-search').value, category: target.querySelector('.aggregate-category').value, character: target.querySelector('.aggregate-character').value, sort: target.querySelector('.aggregate-sort').value });
   function draw() {
     const filtered = filterAggregates(rows, selection());
     target.querySelector('.aggregate-count').textContent = `${filtered.length.toLocaleString()} character/activity records · ${Math.min(limit, filtered.length)} shown`;
-    target.querySelector('.aggregate-result').innerHTML = filtered.length ? `<div class="report-table-wrap"><table class="report-table"><caption class="sr-only">Per-character activity records</caption><thead><tr><th>Activity</th><th>Character</th><th>Completions</th><th>Fastest completion</th><th>Kills</th><th>Deaths</th><th>Time played</th></tr></thead><tbody>${filtered.slice(0, limit).map(row => `<tr><td><strong>${e(row.name)}</strong><span class="report-note"> · ${e(row.category)}</span><details><summary>Variant details</summary><p>${e(row.description)}</p><p>Activity hash: ${e(row.hash)}</p></details></td><td>${e(row.characterName)}</td><td>${e(n(row.completions))}</td><td>${e(durationText(row.fastest))}</td><td>${e(n(row.kills))}</td><td>${e(n(row.deaths))}</td><td>${e(durationText(row.seconds))}</td></tr>`).join('')}</tbody></table></div>` : note('No public records match these filters.');
+    target.querySelector('.aggregate-result').innerHTML = filtered.length ? reportTable(
+      ['Activity', 'Character', 'Completions', 'Fastest time', 'Kills', 'Deaths', 'Time played'], filtered.slice(0, limit).map(row => [
+        `${e(row.name)}<span class="report-note"> · ${e(row.category)}</span><details><summary>Variant details</summary><p>${e(row.description)}</p><p>Activity hash: ${e(row.hash)}</p></details>`,
+        e(row.characterName), e(n(row.completions)), e(durationText(row.fastest)), e(n(row.kills)), e(n(row.deaths)), e(durationText(row.seconds))
+      ]), { caption: 'Per-character activity records' }) : note('No public records match these filters.');
     target.querySelector('.aggregate-more').hidden = filtered.length <= limit;
   }
   async function fetchMissing() {
@@ -90,10 +95,11 @@ export function mountMatchWeapons(target, data, { manifest, signal, isCurrent })
     try {
       const rows = await mapConcurrent(weapons, async weapon => {
         const def = await manifest.definition('DestinyInventoryItemDefinition', weapon.hash, signal);
-        return `<tr><td>${e(def?.displayProperties?.name || `Weapon ${weapon.hash}`)}</td><td>${e(n(weapon.kills))}</td><td>${e(n(weapon.precision))}</td><td>${weapon.precisionRate == null ? 'Unavailable' : `${e(n(weapon.precisionRate, 1))}%`}</td></tr>`;
+        return [e(def?.displayProperties?.name || `Weapon ${weapon.hash}`), e(n(weapon.kills)), e(n(weapon.precision)),
+          weapon.precisionRate == null ? 'Unavailable' : `${e(n(weapon.precisionRate, 1))}%`];
       }, signal, 2);
       signal.throwIfAborted(); if (current !== version || !isCurrent()) return;
-      result.innerHTML = `<div class="report-table-wrap"><table class="report-table"><thead><tr><th>Weapon</th><th>Kills</th><th>Precision kills</th><th>Precision-kill percentage</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+      result.innerHTML = reportTable(['Weapon', 'Kills', 'Precision kills', 'Precision kill %'], rows, { caption: 'Weapons used by this participant' });
     } catch (error) {
       if (signal.aborted || current !== version || !isCurrent()) return;
       result.innerHTML = note(`Weapon details could not load: ${error.message}`) + '<button type="button">Retry weapon details</button>';

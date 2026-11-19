@@ -7,6 +7,7 @@ import { drawPerformanceRating, loadGuardianStandings } from './performanceView.
 import { renderPlayerComparison } from './comparisonView.js';
 import { eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js';
 import { refreshGuardianScore } from './indexQueue.js';
+import { reportTable } from './reportTables.js';
 
 const number = (value, digits = 0) => numeric(value) == null ? 'Unavailable' : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 const tile = (label, value) => `<div class="report-stat"><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`;
@@ -43,11 +44,14 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     <header class="report-header">
       <div><p class="eyebrow">PLAYER DOSSIER</p><h2 class="bungie-name">${e(bungieName)}</h2>
       <p class="report-note">${e(PLATFORMS[membership.membershipType] || 'Destiny 2')} · ${membership.crossSaveOverride ? 'Cross-save active · ' : ''}Last played ${e(dateText(summary.lastPlayed, true))}</p></div>
-      <div class="report-actions"><button type="button" data-action="share">Copy report link</button><button type="button" data-action="print">Print report</button><button type="button" id="downloadRawBtn">Export JSON</button></div>
+      <div class="report-actions"><button type="button" data-action="share">Copy link</button><button type="button" data-action="print">Print</button><button type="button" id="downloadRawBtn">Export JSON</button></div>
     </header>
     <p class="report-note">Public Bungie data · Retrieved ${e(dateText(generatedAt, true))}. Private fields are marked unavailable. Character time includes idle time and excludes deleted characters.</p>
     <p class="share-status" aria-live="polite"></p>
-    <nav class="report-nav" aria-label="Player report sections">${Object.entries(sections).map(([id, label]) => `<button type="button" data-section="${id}" aria-pressed="${id === 'overview'}" aria-controls="report-${id}">${label}</button>`).join('')}</nav>
+    <nav class="report-nav" aria-label="Player report sections">
+      <label class="report-section-picker">Report section<select>${options(sections, 'overview')}</select></label>
+      <div class="report-tabs">${Object.entries(sections).map(([id, label]) => `<button type="button" data-section="${id}" aria-pressed="${id === 'overview'}" aria-controls="report-${id}">${label}</button>`).join('')}</div>
+    </nav>
     ${Object.keys(sections).map(id => `<section id="report-${id}" class="report-panel" aria-label="${sections[id]}" ${id === 'overview' ? '' : 'hidden'}></section>`).join('')}
     <p class="queue-status report-note" role="status"></p>`;
   const panel = id => container.querySelector(`#report-${id}`);
@@ -147,8 +151,11 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
       button.disabled = false;
     }
   }
+  const sectionPicker = container.querySelector('.report-section-picker select');
+  sectionPicker.addEventListener('change', () => container.querySelector(`[data-section="${sectionPicker.value}"]`)?.click());
   container.querySelectorAll('[data-section]').forEach(button => button.addEventListener('click', () => {
     const id = button.dataset.section;
+    sectionPicker.value = id;
     const sectionUrl = new URL(window.location.href);
     sectionUrl.hash = id;
     history.replaceState(null, '', sectionUrl);
@@ -187,16 +194,18 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     exported.sections.eververseNetWorth = valuation;
     eververseValue.textContent = valuation.brightDust == null ? 'No verified estimate' : `${number(valuation.brightDust)} Bright Dust`;
     const amount = price => price == null ? 'Unpriced' : `${number(price)} Bright Dust`;
-    const rows = (headings, body) => `<div class="report-table-wrap"><table class="report-table"><thead><tr>${headings.map(heading => `<th scope="col">${heading}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
     eververseDetails.innerHTML = `${note(`${number(valuation.pricedCount)} of ${number(valuation.ownedCount)} owned Eververse cosmetics have verified Bright Dust prices${valuation.catalogDate ? ` · Bungie catalog dated ${valuation.catalogDate}` : ''}.`)}
       ${valuation.collectionCoverage === 'partial' ? note('Some profile or character Collections are unavailable. The estimate covers visible unlocks.') : ''}
       ${note('The estimate uses the lowest listed direct Bright Dust price per owned cosmetic. Bungie’s public data shows ownership and catalog prices. How a player acquired each cosmetic is private.')}
       ${note('Gameplay and mixed-source rewards, Silver-only offers, bundles, and items without a public Eververse Collections entry contribute no value.')}
-      ${valuation.categories.length ? rows(['Cosmetic type', 'Priced / owned', 'Estimated value'], valuation.categories.map(row => `<tr><th scope="row">${e(row.category)}</th><td>${e(`${number(row.priced)} / ${number(row.owned)}`)}</td><td>${e(amount(row.priced ? row.brightDust : null))}</td></tr>`).join('')) : ''}
+      ${valuation.categories.length ? reportTable(['Cosmetic type', 'Priced / owned', 'Estimated value'], valuation.categories.map(row => [
+        e(row.category), e(`${number(row.priced)} / ${number(row.owned)}`), e(amount(row.priced ? row.brightDust : null))
+      ]), { caption: 'Eververse pricing by cosmetic type' }) : ''}
       ${valuation.items.length ? '<details class="eververse-items"><summary>View individual cosmetics and prices</summary></details>' : ''}`;
     const items = eververseDetails.querySelector('.eververse-items');
     items?.addEventListener('toggle', () => {
-      if (items.open && !items.querySelector('table')) items.insertAdjacentHTML('beforeend', rows(['Cosmetic', 'Type', 'Bright Dust price'], valuation.items.map(item => `<tr><th scope="row">${e(item.name)}</th><td>${e(item.category)}</td><td>${e(amount(item.brightDust))}</td></tr>`).join('')));
+      if (items.open && !items.querySelector('table')) items.insertAdjacentHTML('beforeend', reportTable(['Cosmetic', 'Type', 'Bright Dust price'],
+        valuation.items.map(item => [e(item.name), e(item.category), e(amount(item.brightDust))]), { caption: 'Individual Eververse prices' }));
     });
   }
 
@@ -301,13 +310,20 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
         await mapConcurrent([...new Set(activities.map(a => a.activityDetails?.referenceId).filter(Boolean))], async hash => definitions.set(hash, await safeDefinition('DestinyActivityDefinition', hash)), signal, 3);
         signal.throwIfAborted(); if (version !== historyVersion) return;
         exported.sections.activities = { filters: selected, pagesLoaded: page + 1, partial: failed.length > 0, activities, insights: activityInsights(activities) };
-        result.innerHTML = `${failed.length ? note(`Some history could not load (${failed.join(', ')}). Retry this page before loading older activities.`) : ''}${note(`${activities.length} unique activities loaded · ${page + 1} page(s)`)}${activities.length ? `<div class="report-table-wrap"><table class="report-table"><caption class="sr-only">Loaded activities</caption><thead><tr><th>Activity</th><th>Date</th><th>Result</th><th>Kills</th><th>Deaths</th><th>Duration</th><th>Details</th></tr></thead><tbody>${activities.map(a => {
+        const rows = activities.map(a => {
           const def = definitions.get(a.activityDetails?.referenceId), values = a.values;
           const standing = statValue(values, 'standing'), completed = statValue(values, 'completed');
           const competitive = [5, 63, 84].includes(a.activityDetails?.mode) || a.activityDetails?.modes?.some(m => [5, 63].includes(m));
           const outcome = competitive && standing === 0 ? 'Victory' : competitive && standing === 1 ? 'Defeat' : completed === 1 ? 'Completed' : completed === 0 ? 'Incomplete' : 'Unavailable';
-          return `<tr><td><strong>${e(def?.displayProperties?.name || ACTIVITY_MODES[a.activityDetails?.mode] || 'Activity')}</strong>${a.activityDetails?.isPrivate ? '<span class="report-note"> · Private match</span>' : ''}</td><td>${e(dateText(a.period, true))}</td><td>${outcome}</td><td>${e(number(statValue(values, 'kills')))}</td><td>${e(number(statValue(values, 'deaths')))}</td><td>${e(number((statValue(values, 'activityDurationSeconds') ?? statValue(values, 'timePlayedSeconds')) == null ? null : (statValue(values, 'activityDurationSeconds') ?? statValue(values, 'timePlayedSeconds')) / 60, 1))} min</td><td><button type="button" class="match-open" data-id="${e(a.activityDetails.instanceId)}">Match report</button></td></tr>`;
-        }).join('')}</tbody></table></div>` : note('No public activities found. Activity history may be private or this filter may have no results.')}`;
+          const duration = statValue(values, 'activityDurationSeconds') ?? statValue(values, 'timePlayedSeconds');
+          const title = e(def?.displayProperties?.name || ACTIVITY_MODES[a.activityDetails?.mode] || 'Activity');
+          return [title + (a.activityDetails?.isPrivate ? '<span class="report-note"> · Private match</span>' : ''), e(dateText(a.period, true)), outcome,
+            e(number(statValue(values, 'kills'))), e(number(statValue(values, 'deaths'))), duration == null ? 'Unavailable' : `${e(number(duration / 60, 1))} min`,
+            `<button type="button" class="match-open" data-id="${e(a.activityDetails.instanceId)}">Match report</button>`];
+        });
+        result.innerHTML = `${failed.length ? note(`Some history could not load (${failed.join(', ')}). Retry this page before loading older activities.`) : ''}${note(`${activities.length} unique activities loaded · ${page + 1} page(s)`)}${rows.length
+          ? reportTable(['Activity', 'Date', 'Result', 'Kills', 'Deaths', 'Duration', 'Details'], rows, { caption: 'Loaded activities' })
+          : note('No public activities found. Activity history may be private or this filter may have no results.')}`;
         result.insertAdjacentHTML('afterbegin', activityInsightsHtml(activities));
         // Never skip a failed character's page. Successful rows are deduplicated on retry.
         if (!failed.length) page++;
@@ -327,11 +343,13 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
       await withState(detail, async () => {
         const data = await api.match(id, signal); signal.throwIfAborted(); if (version !== matchVersion) return;
         exported.sections[`match-${id}`] = data;
-        detail.innerHTML = `<h4>Match report · ${e(dateText(data.period, true))}</h4><div class="report-table-wrap"><table class="report-table"><thead><tr><th>Guardian</th><th>Team</th><th>Kills</th><th>Deaths</th><th>Assists</th><th>Score</th></tr></thead><tbody>${(data.entries || []).map(entry => {
+        const rows = (data.entries || []).map(entry => {
           const info = entry.player?.destinyUserInfo || {};
           const name = info.bungieGlobalDisplayName ? `${info.bungieGlobalDisplayName}#${String(info.bungieGlobalDisplayNameCode ?? 0).padStart(4, '0')}` : info.displayName || 'Unknown Guardian';
-          return `<tr><td><a href="?${new URLSearchParams({ name }).toString()}">${e(name)}</a></td><td>${e(number(statValue(entry.values, 'team')))}</td><td>${e(number(statValue(entry.values, 'kills')))}</td><td>${e(number(statValue(entry.values, 'deaths')))}</td><td>${e(number(statValue(entry.values, 'assists')))}</td><td>${e(number(statValue(entry.values, 'score')))}</td></tr>`;
-        }).join('')}</tbody></table></div>`;
+          return [`<a href="?${new URLSearchParams({ name }).toString()}">${e(name)}</a>`,
+            ...['team', 'kills', 'deaths', 'assists', 'score'].map(key => e(number(statValue(entry.values, key))))];
+        });
+        detail.innerHTML = `<h4>Match report · ${e(dateText(data.period, true))}</h4>${reportTable(['Guardian', 'Team', 'Kills', 'Deaths', 'Assists', 'Score'], rows, { caption: 'Match participants' })}`;
         const weapons = document.createElement('div');
         weapons.className = 'match-weapons'; detail.appendChild(weapons);
         mountMatchWeapons(weapons, data, { manifest, signal, isCurrent: () => version === matchVersion });
@@ -346,7 +364,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     const definitions = await manifest.table(records ? 'DestinyRecordDefinition' : 'DestinyCollectibleDefinition', signal);
     const entries = catalogueEntries(profile, type, definitions); signal.throwIfAborted();
     exported.sections[type] = entries;
-    target.innerHTML = `<h3>${records ? 'Triumphs & unlocked titles' : 'Collections'}</h3>${note(records ? 'Completion and redemption are separate. Secret triumph descriptions remain hidden. Titles are listed when Bungie marks them equippable.' : 'Includes visible profile and character collectibles, deduplicated across characters. The denominator is the exposed catalogue, not every item ever released.')}<div class="report-filters"><label>Search ${records ? 'triumphs' : 'collections'}<input class="catalogue-search" type="search" placeholder="Name or description"></label><label>Show<select class="catalogue-filter"><option value="all">All</option><option value="complete">${records ? 'Completed' : 'Acquired'}</option><option value="incomplete">${records ? 'Incomplete' : 'Missing'}</option>${records ? '<option value="titles">Unlocked titles</option>' : ''}</select></label></div><p class="catalogue-count report-note" aria-live="polite"></p><div class="catalogue-grid"></div><button type="button" class="catalogue-more">Show more</button>`;
+    target.innerHTML = `<h3>${records ? 'Triumphs & unlocked titles' : 'Collections'}</h3>${note(records ? 'Completion and redemption are separate. Secret triumph descriptions remain hidden. Titles are listed when Bungie marks them equippable.' : 'Includes visible profile and character collectibles, deduplicated across characters. The denominator is the exposed catalogue, not every item ever released.')}<div class="report-filters"><label>Search ${records ? 'triumphs' : 'collections'}<input class="catalogue-search" type="search" placeholder="Name or details"></label><label>Show<select class="catalogue-filter"><option value="all">All</option><option value="complete">${records ? 'Completed' : 'Acquired'}</option><option value="incomplete">${records ? 'Incomplete' : 'Missing'}</option>${records ? '<option value="titles">Unlocked titles</option>' : ''}</select></label></div><p class="catalogue-count report-note" aria-live="polite"></p><div class="catalogue-grid"></div><button type="button" class="catalogue-more">Show more</button>`;
     let limit = 24;
     function draw() {
       let filtered = filterCatalogue(entries, target.querySelector('input').value, target.querySelector('.catalogue-filter').value, type);
@@ -363,7 +381,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
       target.querySelector('.catalogue-more').hidden = limit >= filtered.length;
     }
     if (records) {
-      target.querySelector('.report-filters').insertAdjacentHTML('beforeend', '<label>Order<select class="catalogue-sort"><option value="name">Name</option><option value="closest">Closest incomplete triumphs</option></select></label>');
+      target.querySelector('.report-filters').insertAdjacentHTML('beforeend', '<label>Order<select class="catalogue-sort"><option value="name">Name</option><option value="closest">Closest first</option></select></label>');
       target.querySelector('.catalogue-sort').addEventListener('change', () => { if (target.querySelector('.catalogue-sort').value === 'closest') target.querySelector('.catalogue-filter').value = 'incomplete'; limit = 24; draw(); });
     }
     target.querySelector('input').addEventListener('input', () => { limit = 24; draw(); });
@@ -380,9 +398,12 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
       const entries = Object.entries(progressions || {}).filter(([, p]) => p.level != null || p.currentProgress != null);
       const rows = await mapConcurrent(entries, async ([hash, p]) => {
         const def = progressionDefinitions[hash];
-        return `<tr><td>${e(def?.displayProperties?.name || `Progression ${hash}`)}</td><td>${e(number(p.level))}</td><td>${e(number(p.progressToNextLevel))} / ${e(number(p.nextLevelAt))}</td><td>${e(number(p.currentResetCount))}</td></tr>`;
+        return [e(def?.displayProperties?.name || `Progression ${hash}`), e(number(p.level)),
+          `${e(number(p.progressToNextLevel))} / ${e(number(p.nextLevelAt))}`, e(number(p.currentResetCount))];
       }, signal, 3);
-      return `<h4>${e(CLASSES[c.classType] || 'Guardian')}</h4>${rows.length ? `<div class="report-table-wrap"><table class="report-table"><thead><tr><th>Progression</th><th>Level</th><th>Progress to next level</th><th>Resets</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>` : note('Public progression is unavailable for this character.')}`;
+      const character = CLASSES[c.classType] || 'Guardian';
+      return `<h4>${e(character)}</h4>${rows.length ? reportTable(['Progression', 'Level', 'Progress to next level', 'Resets'], rows,
+        { caption: `${character} progression` }) : note('Public progression is unavailable for this character.')}`;
     }, signal, 1);
     signal.throwIfAborted(); target.innerHTML = `<h3>Reputation & progression</h3>${note('Levels and resets are Bungie progression counters. Their meaning varies by activity and season.')}${sections.join('')}<h3>Tracked metrics</h3><div class="metrics-result">${note('Load named metrics such as activity counters and personal records.')}<button type="button" class="load-metrics">Load metrics</button></div>`;
     const commendations = document.createElement('div');

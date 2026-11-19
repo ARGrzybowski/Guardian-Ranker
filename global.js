@@ -158,8 +158,8 @@ function renderGlobalGameStats(seasonHash) {
   // Debug download button
   const debugButton = `
     <div class="stat-group">
-      <button id="downloadSeasonDataBtn" style="width: 50%; margin-top: 4px; padding: 2px 4px;">
-        Debug Data
+      <button id="downloadSeasonDataBtn" class="site-button" type="button">
+        Download season data
       </button>
     </div>
   `;
