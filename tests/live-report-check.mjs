@@ -32,7 +32,7 @@ try {
   const emotes = eververse.categories.find(row => row.category === 'Emotes');
   assert.ok(eververse.emoteCoverage === 'public' && emotes?.brightDust > 0, 'Owned emotes resolve through the public wheel');
   console.log(JSON.stringify({ eververseBrightDust: eververse.brightDust, cosmeticsPriced: eververse.pricedCount, cosmeticsOwned: eververse.ownedCount,
-    emotesPriced: emotes.priced, emoteBrightDust: emotes.brightDust, standardArmorEstimates: eververse.standardArmorEstimateCount,
+    emotesPriced: emotes.priced, emoteBrightDust: emotes.brightDust, standardEstimates: eververse.standardEstimateCount,
     collectionCoverage: eververse.collectionCoverage }));
   const api = createReportApi(loaded.membership), manifest = createManifestClient();
   const career = await api.career(signal);

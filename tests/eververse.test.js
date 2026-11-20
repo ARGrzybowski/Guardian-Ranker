@@ -57,16 +57,17 @@ test('distinguishes private collections, zero verified unlocks, and owned items 
 
 test('published pricing snapshot has valid, unique item and collectible identifiers', () => {
   const catalog = JSON.parse(readFileSync(new URL('../eververseCatalog.json', import.meta.url), 'utf8'));
-  assert.equal(catalog.schemaVersion, 4);
+  assert.equal(catalog.schemaVersion, 5);
   assert.equal(catalog.emotePlugSetHash, EMOTE_PLUG_SET);
   assert.ok(catalog.manifestVersion);
   assert.ok(catalog.pricedCount > 0);
   assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[5]), 'Verified set prices reach individual ornaments');
   assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[6] && row[4] === 1200));
-  assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[6] && row[4] === 1500));
+  assert.ok(catalog.items.some(row => row[3] === 'Weapon ornaments' && row[6] && row[4] === 700));
   assert.equal(catalog.items.find(row => row[2] === 'N7 Helm')[4], null, 'The Mass Effect collaboration has no inferred price');
   assert.ok(catalog.items.some(row => row[3] === 'Ghost projections' && row[4] > 0));
   assert.ok(catalog.items.some(row => row[3] === 'Emotes' && row[1].length === 0 && row[4] > 0));
+  assert.ok(catalog.items.every(row => row[3] !== 'Mask ornaments'));
   assert.equal(catalog.items.filter(row => row[4] !== null).length, catalog.pricedCount);
   assert.equal(new Set(catalog.items.map(row => row[0])).size, catalog.items.length);
   const hashes = catalog.items.flatMap(row => row[1]);
@@ -161,4 +162,34 @@ test('standard armor estimates fill gaps and never substitute for marked collabo
   assert.equal(value.brightDust, 2700);
   assert.equal(value.standardArmorEstimateCount, 2);
   assert.equal(value.unpricedCount, 1);
+});
+
+test('cosmetic estimates use the type and rarity and exclude masks and Legendary Mark rewards', () => {
+  const item = (itemType, itemTypeDisplayName, tierType, itemSubType = 0) =>
+    ({ itemType, itemTypeDisplayName, itemSubType, inventory: { tierType } });
+  const inventory = {
+    1: item(19, 'Weapon Ornament', 5, 21),
+    2: item(19, 'Weapon Ornament', 6, 21),
+    3: item(21, 'Ship', 6),
+    4: item(24, 'Ghost Shell', 6),
+    5: item(19, 'Shader', 5, 20),
+    6: item(29, 'Titan Finisher', 5),
+    7: item(19, 'Mask Ornament', 5, 21),
+    8: item(24, 'Ghost Shell', 6),
+    9: { ...item(22, 'Vehicle', 6), tooltipNotifications: [{ displayString: 'Inspired by lore and legends from a distant universe!' }] },
+    10: item(21, 'Ship', 5)
+  };
+  const catalog = buildEververseCatalog({
+    tess: { itemList: [offer(3, 1700), offer(7, 1200), offer(8, 2850)] },
+    tenet: { itemList: [offer(8, 10, 402110270)] }
+  }, Object.fromEntries(Object.keys(inventory).map(id => [id, collectible(Number(id))])), inventory, {});
+  assert.deepEqual(catalog.items.map(row => [row[0], row[4], Boolean(row[6])]), [
+    [1, 700, true], [2, 1250, true], [3, 1700, false], [4, 2850, true], [5, 300, true],
+    [6, 3250, true], [9, null, false], [10, null, false]
+  ]);
+  const value = valueEververseCollection({ owned: new Set([1, 2, 3, 7, 8]), partial: false, emotes: new Set() }, catalog);
+  assert.equal(value.brightDust, 3650);
+  assert.equal(value.standardEstimateCount, 2);
+  assert.equal(value.categories.find(row => row.category === 'Weapon ornaments').estimated, 2);
+  assert.ok(value.items.every(row => row.itemHash !== 7 && row.itemHash !== 8));
 });
