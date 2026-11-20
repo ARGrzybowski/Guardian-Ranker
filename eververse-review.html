@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Eververse price review · Guardian Ranker</title>
+  <link rel="stylesheet" href="style.css?v=bright-dust" />
+  <link rel="stylesheet" href="eververse-review.css?v=1" />
+</head>
+<body>
+  <main class="review-page">
+    <header class="review-header">
+      <a class="back-link" href="index.html">← Guardian Ranker</a>
+      <div class="review-heading">
+        <div>
+          <h1>Eververse price review</h1>
+          <p id="catalog-info">Loading the pricing catalog…</p>
+        </div>
+        <div class="review-actions">
+          <input id="import-file" type="file" accept=".json,application/json" hidden />
+          <button class="site-button" id="import-reviews" type="button" disabled>Import reviews</button>
+          <button class="site-button" id="export-reviews" type="button" disabled>Export reviews</button>
+        </div>
+      </div>
+    </header>
+    <p class="review-message" id="review-message" role="status">Reviews are saved in this browser. Export them to make a backup or share them.</p>
+
+    <dl class="review-progress" aria-label="Review progress">
+      <div><dt>Catalog items</dt><dd id="item-count">—</dd></div>
+      <div><dt>Unreviewed</dt><dd id="unreviewed-count">—</dd></div>
+      <div><dt>Confirmed</dt><dd id="confirmed-count">—</dd></div>
+      <div><dt>Flagged</dt><dd id="flagged-count">—</dd></div>
+    </dl>
+
+    <div id="review-controls" class="review-controls" hidden>
+      <label>Search items<input id="review-query" type="search" placeholder="Name, bundle, source, or item ID" autocomplete="off" /></label>
+      <label>Category<select id="review-category"><option value="">All categories</option></select></label>
+      <label>Price basis<select id="review-basis"><option value="">All prices</option></select></label>
+      <label>Review status<select id="review-status"><option value="">All statuses</option></select></label>
+    </div>
+    <div class="review-list-heading" aria-hidden="true"><span>Item</span><span>Catalog price</span><span>Review decision</span></div>
+    <ul class="review-items" id="review-items" aria-label="Eververse items"></ul>
+    <p id="review-load-status" role="status"></p>
+    <button class="site-button" id="retry-catalog" type="button" hidden>Retry catalog</button>
+    <nav class="review-pagination" id="review-pagination" aria-label="Catalog pages" hidden>
+      <button class="site-button" id="review-previous" type="button">Previous</button>
+      <p id="review-page-info" aria-live="polite"></p>
+      <button class="site-button" id="review-next" type="button">Next</button>
+    </nav>
+    <noscript>Enable JavaScript to review the Eververse catalog.</noscript>
+  </main>
+
+  <dialog class="review-dialog" id="item-details" aria-labelledby="detail-title">
+    <header class="review-dialog-header">
+      <h2 id="detail-title"></h2>
+      <form method="dialog"><button type="submit" class="site-button" autofocus>Close</button></form>
+    </header>
+    <div id="detail-evidence"></div>
+    <form id="detail-review" class="detail-review">
+      <label>Suggested Bright Dust price <span>(optional)</span><input name="suggestedPrice" type="number" min="0" step="1" max="9999999" /></label>
+      <label>Review note <span>(optional)</span><textarea name="note" rows="3" maxlength="2000"></textarea></label>
+      <div class="review-actions">
+        <button class="site-button review-confirm" type="submit" name="decision" value="confirmed">Confirm price</button>
+        <button class="site-button review-flag" type="submit" name="decision" value="flagged">Flag for review</button>
+        <button class="site-button" type="submit" name="decision" value="unreviewed" formnovalidate>Clear decision</button>
+      </div>
+    </form>
+    <div id="detail-definition"></div>
+  </dialog>
+  <script type="module" src="eververseReview.js?v=1"></script>
+</body>
+</html>

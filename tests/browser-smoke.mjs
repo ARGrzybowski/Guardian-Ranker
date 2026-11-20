@@ -52,6 +52,11 @@ const armorOrnamentCatalog = { schemaVersion: 1, manifestVersion: 'test', review
   [201, [2], 'Test Activity Ornament', 'Hunter', 'Legendary', ['Trials of Osiris'], [], ['Legendary Marks']],
   [202, [], 'Test Exotic Ornament', 'Warlock', 'Exotic', [], [], []]
 ] };
+const eververseReviewMetadata = {
+  schemaVersion: 1, manifestVersion: 'test', iconRoot: '/common/destiny2_content/icons/',
+  labels: ['Legendary', 'Titan Universal Ornament', 'Titan', 'Eververse', 'Test Armor Set', 'Bright Dust', 'Tess Everis'],
+  bundles: { 20: [4, [[6000, 5, 6]]] }, rows: [[104, 'test-armor.jpg', 0, 1, 2, [3], [], [20]]]
+};
 const databaseScript = `
 window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
 window.__standingRetry = true;
@@ -120,9 +125,11 @@ const server = createServer(async (request, response) => {
       response.end(databaseScript);
       return;
     }
-    if (pathname === '/eververseCatalog.json' || pathname === '/armorOrnamentCatalog.json') {
+    const catalogs = { '/eververseCatalog.json': eververseCatalog, '/armorOrnamentCatalog.json': armorOrnamentCatalog,
+      '/eververseReviewMetadata.json': eververseReviewMetadata };
+    if (Object.hasOwn(catalogs, pathname)) {
       response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify(pathname === '/eververseCatalog.json' ? eververseCatalog : armorOrnamentCatalog));
+      response.end(JSON.stringify(catalogs[pathname]));
       return;
     }
     const file = resolve(root, `.${pathname === '/' ? '/index.html' : pathname}`);
@@ -678,6 +685,47 @@ try {
   await assertLayout('Bright Dust full board on mobile');
   const narrowBoards = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'leaderboards-mobile.png'), Buffer.from(narrowBoards.data, 'base64'));
+  await cdp('Page.navigate', { url: `${origin}/eververse-review.html` });
+  await waitFor("document.querySelectorAll('.review-item').length === 6");
+  await assertLayout('Eververse price review on mobile');
+  assert.ok(await evaluate("document.querySelector('[data-item=\"104\"] img').src.endsWith('/test-armor.jpg')"));
+  await evaluate("document.querySelector('[data-item=\"104\"] [data-action=confirmed]').click()");
+  assert.equal(await evaluate("document.querySelector('#confirmed-count').textContent"), '1');
+  await evaluate("document.querySelector('[data-item=\"104\"] [data-action=details]').click()");
+  await waitFor("document.querySelector('#detail-definition').textContent.includes('Full Bungie item definition')");
+  assert.match(await evaluate("document.querySelector('#detail-evidence').textContent"), /6,000 Bright Dust divided among 5 pieces/);
+  await assertLayout('Eververse item details on mobile');
+  await evaluate(`document.querySelector('#detail-review textarea').value = 'Check the set';
+    document.querySelector('#detail-review input').value = '1600';
+    document.querySelector('#detail-review button[value=flagged]').click()`);
+  assert.equal(await evaluate("document.querySelector('#flagged-count').textContent"), '1');
+  await cdp('Page.reload');
+  await waitFor("document.querySelector('#flagged-count').textContent === '1'");
+  await evaluate(`const original = URL.createObjectURL;
+    URL.createObjectURL = blob => { window.reviewExport = blob.text(); return original(blob); };
+    HTMLAnchorElement.prototype.click = function () {};
+    document.querySelector('#export-reviews').click()`);
+  const reviewExport = await evaluate('window.reviewExport');
+  const exportedDecision = JSON.parse(reviewExport).decisions[0];
+  assert.equal(exportedDecision.status, 'flagged');
+  assert.equal(exportedDecision.note, 'Check the set');
+  assert.equal(exportedDecision.suggestedPrice, 1600);
+  await evaluate(`document.querySelector('[data-item="104"] [data-action=details]').click();
+    document.querySelector('#detail-review button[value=unreviewed]').click()`);
+  assert.equal(await evaluate("document.querySelector('#flagged-count').textContent"), '0');
+  await evaluate(`(() => {
+    const input = document.querySelector('#import-file');
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([${JSON.stringify(reviewExport)}], 'reviews.json', { type: 'application/json' }));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change'));
+  })()`);
+  await waitFor("document.querySelector('#flagged-count').textContent === '1'");
+  await evaluate(`document.querySelector('#review-status').value = 'flagged';
+    document.querySelector('#review-status').dispatchEvent(new Event('change'))`);
+  assert.equal(await evaluate("document.querySelectorAll('.review-item').length"), 1);
+  await resize(1440, 1000);
+  await assertLayout('Eververse price review on desktop');
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');
   console.log('PASS: account-rating metrics/coverage/retries/exports/deep links, public player reports, activity insights, gear, mobile, privacy/injection, stale searches, and leaderboards.');
 } finally {
