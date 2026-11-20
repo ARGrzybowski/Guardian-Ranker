@@ -34,7 +34,7 @@ function renderBoard(board, errorMessage) {
     tr.appendChild(rank);
     const nameCell = document.createElement('td');
     const link = document.createElement('a');
-    link.href = `index.html?name=${encodeURIComponent(row.bungie_name)}${board === boards.eververse ? '#overview' : board.source ? '#rating' : ''}`;
+    link.href = `index.html?name=${encodeURIComponent(row.bungie_name)}${board === boards.eververse ? '#eververse' : board.source ? '#rating' : ''}`;
     link.textContent = row.bungie_name;
     link.style.color = 'inherit';
     link.style.textDecoration = 'none';

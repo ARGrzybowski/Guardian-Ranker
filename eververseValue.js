@@ -123,9 +123,16 @@ export function confirmedMissingCollectibles(profile) {
   return missing;
 }
 
-export function eververseCatalogCoverage(profile, catalog, valuation) {
+export function eververseItemOwnership(profile, valuation) {
   const owned = new Set(valuation.items.map(item => item.itemHash));
   const missing = valuation.collectionCoverage === 'public' ? confirmedMissingCollectibles(profile) : new Set();
+  return (itemHash, aliases) => {
+    if (owned.has(itemHash)) return 'owned';
+    return aliases.length && aliases.every(hash => missing.has(hash)) ? 'missing' : 'unconfirmed';
+  };
+}
+
+export function eververseCatalogCoverage(profile, catalog, valuation, ownership = eververseItemOwnership(profile, valuation)) {
   const categories = new Map(valuation.categories.map(row => [row.category, {
     ...row, catalogTotal: 0, confirmedMissing: 0, unconfirmed: 0
   }]));
@@ -135,9 +142,9 @@ export function eververseCatalogCoverage(profile, catalog, valuation) {
     });
     const row = categories.get(category);
     row.catalogTotal++;
-    if (owned.has(itemHash)) continue;
-    if (aliases.length && aliases.every(hash => missing.has(hash))) row.confirmedMissing++;
-    else row.unconfirmed++;
+    const state = ownership(itemHash, aliases);
+    if (state === 'missing') row.confirmedMissing++;
+    if (state === 'unconfirmed') row.unconfirmed++;
   }
   return [...categories.values()].sort((a, b) => b.brightDust - a.brightDust || a.category.localeCompare(b.category));
 }

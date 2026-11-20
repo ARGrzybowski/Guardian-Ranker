@@ -365,7 +365,7 @@ try {
   assert.equal(await evaluate("document.querySelectorAll('.home-leaderboards .leaderboard-section').length"), 3);
   assert.equal(await evaluate("document.querySelectorAll('#account-rating-body tr a').length"), 5);
   assert.equal(await evaluate("document.querySelector('#eververse-board-body tr:nth-child(2) td').textContent"), '1');
-  assert.ok(await evaluate("document.querySelector('#eververse-board-body a').href.endsWith('#overview')"));
+  assert.ok(await evaluate("document.querySelector('#eververse-board-body a').href.endsWith('#eververse')"));
   await search('Hawk#7753');
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753' && window.__writes.length === 1");
   await assertSidebar(true);
@@ -408,24 +408,35 @@ try {
   assert.equal(await evaluate("document.querySelector('.clan-summary script')"), null);
   assert.ok(apiCalls.some(url => url.includes('components=100,104,200,202,204,205,300,304,305,800,900,1100,1400')));
   await waitFor("document.querySelector('.eververse-value')?.textContent === '3,800 Bright Dust'");
-  await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
-  assert.match(await evaluate("document.querySelector('.eververse-details').innerText"), /4 of 5 owned Eververse cosmetics/);
-  assert.deepEqual(await evaluate(`[...document.querySelectorAll('.eververse-details thead th')].map(th => th.textContent)`),
+  await evaluate("document.querySelector('.eververse-preview-link').click()");
+  await waitFor("document.querySelector('.eververse-report-total')?.textContent === '3,800 Bright Dust'");
+  assert.equal(await evaluate("location.hash"), '#eververse');
+  assert.match(await evaluate("document.querySelector('#report-eververse .report-stats').textContent"), /Owned with values4 \/ 5/);
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('.eververse-category-summary thead th')].map(th => th.textContent)`),
     ['Cosmetic type', 'Owned', 'Catalog total', 'Confirmed missing', 'Unconfirmed', 'Owned with prices', 'Bright Dust value']);
   const shipCoverage = await evaluate(`(() => {
-    const ships = [...document.querySelectorAll('.eververse-details tbody tr')].find(row => row.querySelector('th').textContent === 'Ships');
+    const ships = [...document.querySelectorAll('.eververse-category-summary tbody tr')].find(row => row.querySelector('th').textContent === 'Ships');
     return Array.from(ships.querySelectorAll('.report-cell-value'), cell => cell.textContent);
   })()`);
   assert.deepEqual(shipCoverage, ['0', '1', '1', '0', '0', '—']);
-  await evaluate("document.querySelector('.eververse-items summary').click()");
   await waitFor("document.querySelector('.eververse-items tbody')?.textContent.includes('<script>Test Shader</script>')");
   assert.equal(await evaluate("document.querySelector('.eververse-items tbody script')"), null);
   assert.equal(await evaluate("document.querySelectorAll('.eververse-items tbody tr').length"), 5);
-  assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /1,200 Bright Dust.*Estimated share of Test Armor Set.*No verified price.*Excluded from total/s);
+  assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /1,200 Bright Dust.*Estimated share of Test Armor Set.*Unpriced.*No verified price/s);
   assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /Partner Armor Ornament.*1,600 Bright Dust.*Collaboration set estimate/s);
   assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /Test Emote.*700 Bright Dust.*Individual offer/s);
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'table-row');
-  await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
+  await waitFor("document.querySelector('.eververse-items img[src$=\"partner-armor.jpg\"]')");
+  await evaluate("document.querySelector('[data-cosmetic-category=Ships]').click()");
+  assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /Missing Ship.*Confirmed missing.*2,000 Bright Dust/s);
+  await evaluate(`const select = document.querySelector('.eververse-category'); select.value = '';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const pricing = document.querySelector('.eververse-pricing'); pricing.value = 'unpriced';
+    pricing.dispatchEvent(new Event('change', { bubbles: true }));
+    const query = document.querySelector('.eververse-filters input'); query.value = 'shell';
+    query.dispatchEvent(new Event('input'))`);
+  assert.equal(await evaluate("document.querySelectorAll('.eververse-items tbody tr').length"), 1);
+  assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /Test Shell.*Unpriced/s);
   async function openSection(id, condition) {
     await evaluate(`{
       const picker = document.querySelector('.report-section-picker select');
@@ -569,10 +580,12 @@ try {
   await waitFor("document.querySelector('#results .queue-status')?.textContent.includes('could not be queued')");
   assert.equal(await evaluate("document.querySelector('#results .bungie-name').textContent"), 'Offline#1234');
   await search('PrivateCollections#1234');
-  await waitFor("document.querySelector('.eververse-details')?.textContent.includes('did not return public Collections data')");
+  await waitFor("document.querySelector('.eververse-value')?.textContent === 'Unavailable'");
+  await openSection('eververse', "document.querySelector('#report-eververse')?.textContent.includes('did not return public Collections data')");
   assert.equal(await evaluate("document.querySelector('.eververse-value').textContent"), 'Unavailable');
   await search('PrivateEmotes#1234');
-  await waitFor("document.querySelector('.eververse-details')?.textContent.includes('did not return public emote data')");
+  await waitFor("document.querySelector('.eververse-value')?.textContent === '3,100 Bright Dust'");
+  await openSection('eververse', "document.querySelector('#report-eververse')?.textContent.includes('did not return public emote data')");
   assert.equal(await evaluate("document.querySelector('.eververse-value').textContent"), '3,100 Bright Dust');
   await search('Private#1234');
   await waitFor("document.getElementById('results').textContent.includes('No public characters')");
@@ -613,8 +626,7 @@ try {
   await writeFile(join(artifactDir, 'global-sidebar-mobile.png'), Buffer.from(mobileSidebar.data, 'base64'));
   await evaluate("document.querySelector('#game-season-details summary').click()");
   await waitFor("document.querySelector('.eververse-value')?.textContent === '3,800 Bright Dust'");
-  await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click(); document.querySelector('.eververse-items summary').click()");
-  await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 5 && document.querySelector('.eververse-items .report-cell-label').getClientRects().length");
+  await openSection('eververse', "document.querySelectorAll('.eververse-items tbody tr').length === 5 && document.querySelector('.eververse-items .report-cell-label').getClientRects().length");
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'grid');
   await assertLayout('Eververse breakdown');
   await openSection('armor', "document.querySelector('#report-armor .ornament-results')?.textContent.includes('Test Exotic Ornament')");
@@ -675,7 +687,7 @@ try {
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
   const desktop = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'leaderboards.png'), Buffer.from(desktop.data, 'base64'));
-  await evaluate("window.__indexMissing = true; import('./leaderboard.js?v=bright-dust').then(module => module.loadLeaderboards())");
+  await evaluate("window.__indexMissing = true; import('./leaderboard.js?v=profile-eververse').then(module => module.loadLeaderboards())");
   assert.match(await evaluate("document.getElementById('index-status').textContent"), /not enabled yet/);
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
   await resize(320, 780, true);
@@ -688,10 +700,14 @@ try {
   await waitFor("document.querySelector('#board-rows').textContent.includes('3,800')");
   assert.equal(await evaluate("document.querySelector('#board-unit').textContent"), 'Bright Dust');
   assert.equal(await evaluate("document.querySelectorAll('#board-rows tr a').length"), 2);
-  assert.ok(await evaluate("document.querySelector('#board-rows a').href.endsWith('#overview')"));
+  assert.ok(await evaluate("document.querySelector('#board-rows a').href.endsWith('#eververse')"));
   await assertLayout('Bright Dust full board on mobile');
   const narrowBoards = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'leaderboards-mobile.png'), Buffer.from(narrowBoards.data, 'base64'));
+  const eververseLink = await evaluate("document.querySelector('#board-rows a').href");
+  await cdp('Page.navigate', { url: eververseLink });
+  await waitFor("document.querySelector('#report-eververse .eververse-report-total')?.textContent === '3,800 Bright Dust'");
+  assert.equal(await evaluate("document.querySelector('.report-section-picker select').value"), 'eververse');
   await cdp('Page.navigate', { url: `${origin}/eververse-review.html` });
   await waitFor("document.querySelectorAll('.review-item').length === 2");
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.review-item')].map(row=>row.dataset.item)"), ['103', '105']);
