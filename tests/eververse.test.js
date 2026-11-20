@@ -92,14 +92,14 @@ test('Eververse catalog totals distinguish owned, visibly missing, and unconfirm
 
 test('published pricing snapshot has valid, unique item and collectible identifiers', () => {
   const catalog = JSON.parse(readFileSync(new URL('../eververseCatalog.json', import.meta.url), 'utf8'));
-  assert.equal(catalog.schemaVersion, 5);
+  assert.equal(catalog.schemaVersion, 6);
   assert.equal(catalog.emotePlugSetHash, EMOTE_PLUG_SET);
   assert.ok(catalog.manifestVersion);
   assert.ok(catalog.pricedCount > 0);
   assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[5]), 'Verified set prices reach individual ornaments');
   assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[6] && row[4] === 1200));
   assert.ok(catalog.items.some(row => row[3] === 'Weapon ornaments' && row[6] && row[4] === 700));
-  assert.equal(catalog.items.find(row => row[2] === 'N7 Helm')[4], null, 'The Mass Effect collaboration has no inferred price');
+  assert.deepEqual(catalog.items.find(row => row[2] === 'N7 Helm').slice(4), [1600, null, 'collaboration']);
   assert.ok(catalog.items.some(row => row[3] === 'Ghost projections' && row[4] > 0));
   assert.ok(catalog.items.some(row => row[3] === 'Emotes' && row[1].length === 0 && row[4] > 0));
   assert.ok(catalog.items.every(row => row[3] !== 'Mask ornaments'));
@@ -197,6 +197,35 @@ test('standard armor estimates fill gaps and never substitute for marked collabo
   assert.equal(value.brightDust, 2700);
   assert.equal(value.standardArmorEstimateCount, 2);
   assert.equal(value.unpricedCount, 1);
+});
+
+test('collaboration estimates require a complete Eververse set and yield to verified offers', () => {
+  const members = [1, 2, 3, 4, 5].map(itemHash => ({ itemHash, quantity: 1 }));
+  const inventory = Object.fromEntries(members.map(({ itemHash }) => [itemHash, {
+    itemType: 19, itemSubType: 21, itemTypeDisplayName: 'Hunter Universal Ornament', classType: 1, inventory: { tierType: 5 }
+  }]));
+  const displayProperties = { name: 'Partner Pack' };
+  inventory[20] = { itemTypeDisplayName: 'Package', displayProperties,
+    tooltipNotifications: [{ displayString: 'Inspired by lore and legends from a distant universe!' }] };
+  const collectibles = Object.fromEntries(members.map(({ itemHash }) => [itemHash, collectible(itemHash)]));
+  collectibles[9] = collectible(1);
+  const vendors = {
+    10: { itemList: [offer(2, 1800)] },
+    20: { displayProperties, itemList: members }
+  };
+  const buildCatalog = () => buildEververseCatalog(vendors, collectibles, inventory, {});
+  const getValue = () => valueEververseCollection({ owned: new Set([1, 2, 9]), partial: false }, buildCatalog());
+  const value = getValue();
+  assert.equal(value.brightDust, 3400);
+  assert.equal(value.collaborationEstimateCount, 1);
+  assert.equal(value.standardEstimateCount, 0);
+  assert.equal(value.categories[0].estimated, 1);
+  assert.equal(value.items.find(item => item.itemHash === 1).collaborationEstimate, true);
+  vendors[10].itemList.push(offer(20, 7500));
+  assert.equal(getValue().brightDust, 3000, 'The verified bundle price takes precedence');
+  collectibles[4].sourceString = 'Source: Season Pass Reward';
+  assert.equal(getValue().brightDust, 1800, 'A mixed-source pack does not establish collaboration prices');
+  assert.ok(!buildCatalog().items.some(row => row[0] === 4));
 });
 
 test('cosmetic estimates use the type and rarity and exclude masks and Legendary Mark rewards', () => {

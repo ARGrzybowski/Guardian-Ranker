@@ -1,7 +1,7 @@
 const NOT_ACQUIRED = 1;
 const HIDDEN = 2 | 4;
 export const EMOTE_PLUG_SET = 2860926541;
-export const EVERVERSE_CATALOG_VERSION = 5;
+export const EVERVERSE_CATALOG_VERSION = 6;
 
 function collectibleTable(scope) {
   const table = scope?.collectibles;
@@ -45,18 +45,23 @@ export function valueEververseCollection({ owned, partial, emotes }, catalog) {
   let pricedCount = 0;
   let standardEstimateCount = 0;
   let standardArmorEstimateCount = 0;
+  let collaborationEstimateCount = 0;
 
-  for (const [itemHash, collectibleHashes, name, category, price, ornamentSet, standardEstimate] of catalog.items) {
+  for (const [itemHash, collectibleHashes, name, category, price, ornamentSet, estimate] of catalog.items) {
     if (!collectibleHashes.some(hash => owned.has(hash)) && !(category === 'Emotes' && emotes?.has(itemHash))) continue;
+    const standardEstimate = estimate === true;
+    const collaborationEstimate = estimate === 'collaboration';
     const standardArmorEstimate = standardEstimate && category === 'Armor ornaments';
     items.push({ itemHash, name, category, brightDust: price, ...(ornamentSet ? { ornamentSet } : {}),
-      ...(standardEstimate ? { standardEstimate } : {}), ...(standardArmorEstimate ? { standardArmorEstimate } : {}) });
+      ...(standardEstimate ? { standardEstimate } : {}), ...(standardArmorEstimate ? { standardArmorEstimate } : {}),
+      ...(collaborationEstimate ? { collaborationEstimate } : {}) });
     if (standardEstimate) standardEstimateCount++;
     if (standardArmorEstimate) standardArmorEstimateCount++;
+    if (collaborationEstimate) collaborationEstimateCount++;
     if (!categories.has(category)) categories.set(category, { category, owned: 0, priced: 0, estimated: 0, brightDust: 0 });
     const totals = categories.get(category);
     totals.owned++;
-    if (standardEstimate || ornamentSet) totals.estimated++;
+    if (estimate || ornamentSet) totals.estimated++;
     if (price === null) continue;
     pricedCount++;
     brightDust += price;
@@ -76,6 +81,7 @@ export function valueEververseCollection({ owned, partial, emotes }, catalog) {
     pricedCount,
     standardEstimateCount,
     standardArmorEstimateCount,
+    collaborationEstimateCount,
     unpricedCount: items.length - pricedCount,
     categories: [...categories.values()].sort((a, b) => b.brightDust - a.brightDust || a.category.localeCompare(b.category)),
     items: items.sort((a, b) => (b.brightDust ?? 0) - (a.brightDust ?? 0) || a.name.localeCompare(b.name))
@@ -118,7 +124,7 @@ export function eververseCatalogCoverage(profile, catalog, valuation) {
 let savedCatalog;
 export async function loadEververseCatalog(signal) {
   if (savedCatalog) return savedCatalog;
-  const response = await fetch(new URL('./eververseCatalog.json?v=5', import.meta.url), { signal });
+  const response = await fetch(new URL(`./eververseCatalog.json?v=${EVERVERSE_CATALOG_VERSION}`, import.meta.url), { signal });
   if (!response.ok) throw new Error('The Eververse price catalog could not be loaded.');
   const catalog = await response.json();
   signal.throwIfAborted();
