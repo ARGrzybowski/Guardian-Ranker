@@ -40,6 +40,8 @@ The Eververse breakdown separates owned items, the catalog total, confirmed miss
 
 The Armor ornaments section lists public, named armor ornament definitions, including legacy and gameplay ornaments. Each item starts at 1,200 Bright Dust for the pricing review. Collections labels, exact bundle previews, and observed offer currencies are recorded when available. Items without public collectible states have unconfirmed ownership. Festival mask ornaments are excluded. Eververse net worth and its leaderboard use the Eververse pricing catalog. Rebuild the full armor list with `node scripts/build-armor-ornament-catalog.mjs`.
 
+Open [Eververse price review](../eververse-review.html) to confirm or flag any item in the published Eververse catalog. Item details show Bungie images, Collections sources, and listed offers. Review decisions and notes are saved in the current browser. JSON export and import transfer decisions between devices. A decision applies to the price and pricing basis it reviewed. Generate the review evidence with `node scripts/build-eververse-review.mjs` after generating the Eververse catalog.
+
 ## Analysis coverage
 
 The [account rating methodology](account-rating.md) defines every weight, curve, coverage rule, limitation and example. It is an editorial account-achievement model, not a calibrated population percentile or matchmaking skill rating. Ratings load their required sources independently of other tabs and are included in JSON export when calculated.
