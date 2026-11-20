@@ -1,7 +1,7 @@
 import { escapeHtml as e } from './html.js';
 import { bungieImage, createManifestClient } from './manifest.js';
 import { loadEververseCatalog } from './eververseValue.js?v=armor-catalog';
-import { importPriceDecisions, PRICE_BASES, REVIEW_STATES, reviewItems } from './eververseReviewData.js?v=1';
+import { importPriceDecisions, PRICE_BASES, REVIEW_STATES, priceReviewQueue, reviewItems } from './eververseReviewData.js?v=2';
 
 const PAGE_SIZE = 24;
 const STORAGE_KEY = 'guardian-ranker.eververse-price-review.v1';
@@ -32,15 +32,28 @@ function currentFocus() {
   return { hash: button?.closest('[data-item]')?.dataset.item, action: button?.dataset.action };
 }
 
+function updateChoices(select, label, values) {
+  const key = JSON.stringify(values);
+  if (select.dataset.choices === key) return;
+  const selected = select.value;
+  select.innerHTML = choice(label, '') + values.map(([value, text]) => choice(text, value)).join('');
+  select.value = values.some(([value]) => value === selected) ? selected : '';
+  select.dataset.choices = key;
+}
+
 function render(focus = {}) {
   const [queryInput, category, basis, status] = filters;
   const query = queryInput.value.trim().toLowerCase();
+  const queue = priceReviewQueue(items, decisions);
+  updateChoices(category, 'All categories', [...new Set(queue.map(item => item.category))].sort().map(name => [name, name]));
+  updateChoices(basis, 'All price bases', [...new Set(queue.map(item => item.basis))].map(key => [key, PRICE_BASES[key]]));
   const totals = { confirmed: 0, flagged: 0, unreviewed: 0 };
-  for (const item of items) totals[statusOf(item)]++;
-  byId('item-count').textContent = fmt.format(items.length);
+  for (const item of queue) totals[statusOf(item)]++;
+  byId('item-count').textContent = fmt.format(queue.length);
   for (const [key, count] of Object.entries(totals)) byId(`${key}-count`).textContent = fmt.format(count);
-  const matches = items.filter(item => (!category.value || item.category === category.value) &&
-    (!basis.value || item.basis === basis.value) && (!status.value || statusOf(item) === status.value) &&
+  const matches = queue.filter(item => (!category.value || item.category === category.value) &&
+    (!basis.value || item.basis === basis.value) &&
+    (!status.value || (status.value === 'open' ? statusOf(item) !== 'confirmed' : statusOf(item) === status.value)) &&
     (!query || item.search.includes(query)));
   pageCount = Math.ceil(matches.length / PAGE_SIZE);
   page = Math.min(page, Math.max(0, pageCount - 1));
@@ -199,12 +212,8 @@ async function load() {
     items.sort((a, b) => a.name.localeCompare(b.name) || a.hash - b.hash);
     itemsByHash = new Map(items.map(item => [item.hash, item]));
     decisions = readDecisions() ?? new Map();
-    const categories = [...new Set(items.map(item => item.category))].sort();
-    filters[1].insertAdjacentHTML('beforeend', categories.map(text => choice(text, text)).join(''));
-    filters[2].insertAdjacentHTML('beforeend', Object.entries(PRICE_BASES).map(([key, text]) => choice(text, key)).join(''));
     filters[3].insertAdjacentHTML('beforeend', Object.entries(REVIEW_STATES).map(([key, text]) => choice(text, key)).join(''));
-    byId('catalog-info').textContent = catalog.catalogDate
-      ? `Bungie catalog dated ${catalog.catalogDate} · Bright Dust values` : 'Bungie catalog · Bright Dust values';
+    byId('catalog-info').textContent = `Unpriced items, estimates, and your flags${catalog.catalogDate ? ` · Catalog dated ${catalog.catalogDate}` : ''}`;
     if (!compatible) message.textContent = 'Catalog prices are available. Bungie images and offer evidence could not be matched to this snapshot.';
     byId('review-controls').hidden = false;
     byId('import-reviews').disabled = false;

@@ -7,6 +7,14 @@ export const PRICE_BASES = {
   unpriced: 'Unpriced'
 };
 
+const REVIEW_PRIORITY = { unpriced: 0, collaboration: 1, standard: 2 };
+
+export function priceReviewQueue(items, decisions) {
+  return items
+    .filter(item => Object.hasOwn(REVIEW_PRIORITY, item.basis) || decisions.get(item.hash)?.status === 'flagged')
+    .sort((a, b) => (REVIEW_PRIORITY[a.basis] ?? 3) - (REVIEW_PRIORITY[b.basis] ?? 3));
+}
+
 export function reviewItems(catalog, metadata) {
   const definitions = new Map(metadata?.rows?.map(([hash, ...fields]) => [hash, fields]) || []);
   const labels = metadata?.labels || [];

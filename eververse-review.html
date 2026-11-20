@@ -27,7 +27,7 @@
     <p class="review-message" id="review-message" role="status">Reviews are saved in this browser. Export them to make a backup or share them.</p>
 
     <dl class="review-progress" aria-label="Review progress">
-      <div><dt>Catalog items</dt><dd id="item-count">—</dd></div>
+      <div><dt>Items in review</dt><dd id="item-count">—</dd></div>
       <div><dt>Unreviewed</dt><dd id="unreviewed-count">—</dd></div>
       <div><dt>Confirmed</dt><dd id="confirmed-count">—</dd></div>
       <div><dt>Flagged</dt><dd id="flagged-count">—</dd></div>
@@ -36,11 +36,11 @@
     <div id="review-controls" class="review-controls" hidden>
       <label>Search items<input id="review-query" type="search" placeholder="Name, bundle, source, or item ID" autocomplete="off" /></label>
       <label>Category<select id="review-category"><option value="">All categories</option></select></label>
-      <label>Price basis<select id="review-basis"><option value="">All prices</option></select></label>
-      <label>Review status<select id="review-status"><option value="">All statuses</option></select></label>
+      <label>Price basis<select id="review-basis"><option value="">All price bases</option></select></label>
+      <label>Review status<select id="review-status"><option value="open">Open reviews</option><option value="">All statuses</option></select></label>
     </div>
     <div class="review-list-heading" aria-hidden="true"><span>Item</span><span>Catalog price</span><span>Review decision</span></div>
-    <ul class="review-items" id="review-items" aria-label="Eververse items"></ul>
+    <ul class="review-items" id="review-items" aria-label="Eververse items for price review"></ul>
     <p id="review-load-status" role="status"></p>
     <button class="site-button" id="retry-catalog" type="button" hidden>Retry catalog</button>
     <nav class="review-pagination" id="review-pagination" aria-label="Catalog pages" hidden>
@@ -68,6 +68,6 @@
     </form>
     <div id="detail-definition"></div>
   </dialog>
-  <script type="module" src="eververseReview.js?v=1"></script>
+  <script type="module" src="eververseReview.js?v=2"></script>
 </body>
 </html>
