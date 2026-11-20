@@ -28,7 +28,8 @@ function option(value, label) {
 
 function guardianLink(name, board) {
   const link = node('a', name);
-  link.href = 'index.html?' + new URLSearchParams({ name }) + (board.category === 'Profiles' || board.unit === 'bright_dust' ? '#overview' : '#rating');
+  const section = board.unit === 'bright_dust' ? '#eververse' : board.category === 'Profiles' ? '#overview' : '#rating';
+  link.href = 'index.html?' + new URLSearchParams({ name }) + section;
   return link;
 }
 

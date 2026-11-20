@@ -428,6 +428,33 @@ ul#suggestions li:hover {
 .clan-summary { padding: 24px 0; border-top: 1px solid var(--report-border); }
 .clan-card p { line-height: 1.6; }
 .report-details { padding: 20px 0; border-top: 1px solid var(--report-border); }
+.eververse-preview-link { margin-top: 8px; }
+.eververse-report-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px 20px;
+  margin-bottom: 14px;
+}
+.eververse-report-header h3 { margin: 0 0 8px; }
+.eververse-report-total { display: block; color: #f6d98b; font-size: clamp(1.4rem, 4vw, 2.35rem); }
+.eververse-category-summary .eververse-category-button {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  color: var(--report-accent);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.eververse-cosmetics-heading { margin-top: 26px; }
+.eververse-item-title { display: flex; align-items: center; gap: 9px; }
+.eververse-item-title img { flex: none; width: 28px; height: 28px; border-radius: 4px; object-fit: cover; }
+.eververse-more { margin-bottom: 14px; }
+.eververse-items + .eververse-more + details { margin-top: 16px; }
 .player-report summary { cursor: pointer; color: var(--report-accent); line-height: 1.5; }
 .player-report details p { line-height: 1.6; font-size: .85rem; }
 .preserve-lines { white-space: pre-wrap; }
@@ -568,6 +595,7 @@ ul#suggestions li:hover {
   #results.player-report, .report-stat, .career-card, .gear-item, .catalogue-item, .report-table tr { background: white; color: black; border-color: #ccc; }
   .report-panel:not(:empty)[hidden] { display: block; }
   .player-report button, .report-filters { display: none; }
+  .player-report .eververse-category-button { display: inline; color: inherit; text-decoration: none; }
   .player-report h2, .player-report h3, .player-report h4, .player-report h5, .report-stat dd { color: black; }
   .report-note, .report-stat dt, .gear-item p, .catalogue-item p { color: #333; }
   .report-panel { break-before: auto; margin: 25px 0; }
