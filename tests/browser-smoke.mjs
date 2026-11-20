@@ -41,7 +41,7 @@ const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
 recordDefinitions[31] = { displayProperties: { name: 'SECRET SPOILER', description: 'SECRET SOLUTION' }, stateInfo: { obscuredDescription: 'Keep playing to reveal.' } };
 const collectibleDefinitions = { 1: { displayProperties: { name: 'Test Exotic', description: 'An acquired item' } }, 2: { displayProperties: { name: 'Missing Ship', description: 'Not yet acquired' } } };
-const eververseCatalog = { schemaVersion: 4, emotePlugSetHash: 2860926541, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 5, items: [
+const eververseCatalog = { schemaVersion: 5, emotePlugSetHash: 2860926541, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 5, items: [
   [101, [1, 4], '<script>Test Shader</script>', 'Shaders', 300], [102, [2], 'Missing Ship', 'Ships', 2000], [103, [3], 'Test Shell', 'Ghost shells', null],
   [104, [5], 'Test Armor Ornament', 'Armor ornaments', 1200, 'Test Armor Set'],
   [105, [6], 'Regular Armor Ornament', 'Armor ornaments', 1200, null, true],
@@ -400,7 +400,7 @@ try {
   assert.equal(await evaluate("document.querySelector('.eververse-items tbody script')"), null);
   assert.equal(await evaluate("document.querySelectorAll('.eververse-items tbody tr').length"), 5);
   assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /1,200 Bright Dust.*Estimated share of Test Armor Set.*No verified price.*Excluded from total/s);
-  assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /Regular Armor Ornament.*1,200 Bright Dust.*Standard armor estimate/s);
+  assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /Regular Armor Ornament.*1,200 Bright Dust.*Standard price estimate/s);
   assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /Test Emote.*700 Bright Dust.*Individual offer/s);
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'table-row');
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
@@ -501,6 +501,7 @@ try {
   assert.equal(exported.sections.eververseNetWorth.brightDust, 3400);
   assert.equal(exported.sections.eververseNetWorth.emoteCoverage, 'public');
   assert.equal(exported.sections.eververseNetWorth.standardArmorEstimateCount, 1);
+  assert.equal(exported.sections.eververseNetWorth.standardEstimateCount, 1);
   assert.equal(exported.sections.eververseNetWorth.unpricedCount, 1);
   assert.equal(exported.sections.accountRating.version, PERFORMANCE_VERSION);
   assert.equal(exported.sections.accountRating.performance.percentile, 82);

@@ -74,5 +74,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f tests/sql/eververse-pricing-v3.sql
           psql -v ON_ERROR_STOP=1 -f supabase/eververse-emote-prices.sql
           psql -v ON_ERROR_STOP=1 -f tests/sql/eververse-emote-prices.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/eververse-category-prices.sql
+          psql -v ON_ERROR_STOP=1 -f tests/sql/eververse-category-prices.sql
       - name: Verify public Bungie response schemas from the cloud
         run: node tests/live-report-check.mjs

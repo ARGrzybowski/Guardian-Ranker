@@ -4,6 +4,7 @@ import { EMOTE_PLUG_SET, EVERVERSE_CATALOG_VERSION } from '../eververseValue.js'
 
 const BUNGIE = 'https://www.bungie.net';
 const BRIGHT_DUST = 2817410917;
+const LEGENDARY_MARK = 402110270;
 const EVERVERSE_SOURCE = 'Source: Eververse';
 // Tess and the manifest's Eververse Ghost Projection rotation.
 const PROJECTION_VENDORS = new Set(['3361454721', '1446296883']);
@@ -12,6 +13,18 @@ const EMOTE_VENDORS = new Set(['3361454721', '2184482416', '3118972542']);
 const COSMETIC_TYPES = new Map([[14, 'Emblems'], [21, 'Ships'], [22, 'Vehicles'], [23, 'Emotes'], [24, 'Ghost shells'], [29, 'Finishers']]);
 const COSMETIC_MODS = new Map([['Ghost Projection', 'Ghost projections'], ['Transmat Effect', 'Transmat effects'], ['Emote', 'Emotes'], ['Multiplayer Emote', 'Emotes']]);
 const ARMOR_TYPE = /^(Hunter|Titan|Warlock)( Universal)? Ornament$/;
+const STANDARD_DUST = {
+  // Legendary weapon ornaments use the historical retail rate. Today's
+  // rotations retain the Exotic rate.
+  'Weapon ornaments': { 5: 700, 6: 1250 },
+  'Ghost shells': { 6: 2850 },
+  Ships: { 6: 2000 },
+  Vehicles: { 6: 2500 },
+  Shaders: { 5: 300 },
+  Finishers: { 5: 3250 },
+  'Ghost projections': { 4: 1500, 5: 1500 },
+  'Transmat effects': { 5: 450 }
+};
 
 function needsIndividualPrice(item) {
   // Bungie marks partner items and shared cross-class unlocks with these tooltips.
@@ -19,20 +32,26 @@ function needsIndividualPrice(item) {
     /distant universe|available for all classes once acquired|partnership/i.test(displayString));
 }
 
-function standardArmorPrice(item) {
-  const type = ARMOR_TYPE.exec(item.itemTypeDisplayName);
-  // Matched against Bungie's retail offers and five-piece set prices.
-  if (type?.[2] && item.inventory?.tierType === 5) return 1200;
-  if (type && !type[2] && item.inventory?.tierType === 6) return 1500;
-  return null;
+function standardDust(category, item) {
+  const tier = item.inventory?.tierType;
+  if (category === 'Armor ornaments') {
+    const type = ARMOR_TYPE.exec(item.itemTypeDisplayName);
+    if (type?.[2] && tier === 5) return 1200;
+    if (type && !type[2] && tier === 6) return 1500;
+  }
+  if (category === 'Emotes') {
+    if (item.itemTypeDisplayName === 'Multiplayer Emote') return ({ 5: 1250, 6: 4250 })[tier] ?? null;
+    if (item.itemTypeDisplayName === 'Emote') return ({ 4: 400, 5: 700, 6: 3250 })[tier] ?? null;
+  }
+  return STANDARD_DUST[category]?.[tier] ?? null;
 }
 
 function cosmeticCategory(item) {
+  if (item?.itemTypeDisplayName === 'Mask Ornament') return null;
   if (item?.itemType !== 19) return COSMETIC_TYPES.get(item?.itemType);
   if (item.itemSubType === 20) return 'Shaders';
   if (item.itemSubType === 21) {
     if (item.itemTypeDisplayName === 'Weapon Ornament') return 'Weapon ornaments';
-    if (item.itemTypeDisplayName === 'Mask Ornament') return 'Mask ornaments';
     return 'Armor ornaments';
   }
   return COSMETIC_MODS.get(item.itemTypeDisplayName);
@@ -42,6 +61,7 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
   const prices = new Map();
   const storeProjections = new Set();
   const emotePrices = new Map();
+  const gameplayRewards = new Set();
   const wheel = new Set((plugSets[EMOTE_PLUG_SET]?.reusablePlugItems || []).map(plug => plug.plugItemHash));
   // Bungie also lists rotation pools as unnamed vendors. We require independent
   // Eververse provenance from Collections before accepting any price.
@@ -50,7 +70,9 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
     for (const sale of vendor.itemList || []) {
       if (sale.quantity !== 1 || sale.currencies?.length !== 1) continue;
       const cost = sale.currencies[0];
-      if (cost.itemHash !== BRIGHT_DUST || !Number.isSafeInteger(cost.quantity) || cost.quantity <= 0 || cost.scalarDenominator || cost.hasConditionalVisibility) continue;
+      if (!Number.isSafeInteger(cost.quantity) || cost.quantity <= 0 || cost.scalarDenominator || cost.hasConditionalVisibility) continue;
+      if (cost.itemHash === LEGENDARY_MARK) gameplayRewards.add(sale.itemHash);
+      if (cost.itemHash !== BRIGHT_DUST) continue;
       prices.set(sale.itemHash, Math.min(prices.get(sale.itemHash) ?? Infinity, cost.quantity));
       if (PROJECTION_VENDORS.has(vendorHash)) storeProjections.add(sale.itemHash);
       if (EMOTE_VENDORS.has(vendorHash) && wheel.has(sale.itemHash) && cosmeticCategory(inventory[sale.itemHash]) === 'Emotes') {
@@ -69,7 +91,8 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
     const storeEmote = emotePrices.has(collectible.itemHash);
     const eligibleEmoteSource = !source || source === EVERVERSE_SOURCE || source === 'Source: Bright Engrams';
     if (storeEmote && (collectible.redacted || !eligibleEmoteSource)) excludedEmotes.add(collectible.itemHash);
-    if (!category || !name || collectible.redacted || item.redacted || item.blacklisted || /^Classified\b/i.test(name)) continue;
+    if (!category || !name || gameplayRewards.has(collectible.itemHash) || collectible.redacted ||
+        item.redacted || item.blacklisted || /^Classified\b/i.test(name)) continue;
     const row = byItem.get(collectible.itemHash) ?? { hashes: [], category, name, eververseOnly: true };
     row.eververseOnly &&= source === EVERVERSE_SOURCE ||
       (!source && category === 'Ghost projections' && storeProjections.has(collectible.itemHash)) ||
@@ -78,7 +101,7 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
     byItem.set(collectible.itemHash, row);
   }
   for (const hash of emotePrices.keys()) {
-    if (excludedEmotes.has(hash)) {
+    if (excludedEmotes.has(hash) || gameplayRewards.has(hash)) {
       byItem.delete(hash);
       continue;
     }
@@ -122,8 +145,7 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
       if (set && set.price < (direct ?? Infinity)) return [...base, set.price, set.name];
       if (direct !== undefined) return [...base, direct];
       const item = inventory[hash];
-      const standard = row.category === 'Armor ornaments' && !requiresOffer.has(hash) && !needsIndividualPrice(item)
-        ? standardArmorPrice(item) : null;
+      const standard = !requiresOffer.has(hash) && !needsIndividualPrice(item) ? standardDust(row.category, item) : null;
       return standard === null ? [...base, null] : [...base, standard, null, true];
     });
   return { schemaVersion: EVERVERSE_CATALOG_VERSION, emotePlugSetHash: EMOTE_PLUG_SET, ...metadata,
@@ -157,7 +179,7 @@ async function generate() {
   const { items, ...header } = catalog;
   const json = `${JSON.stringify(header).slice(0, -1)},"items":[\n${items.map(row => JSON.stringify(row)).join(',\n')}\n]}\n`;
   await writeFile(new URL('../eververseCatalog.json', import.meta.url), json);
-  console.log(`Catalog ${catalog.manifestVersion}: ${catalog.pricedCount} of ${items.length} priced; ${items.filter(row => row[3] === 'Emotes' && row[4] !== null).length} priced emotes.`);
+  console.log(`Catalog ${catalog.manifestVersion}: ${catalog.pricedCount} of ${items.length} priced; ${items.filter(row => row[6]).length} category estimates.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await generate();

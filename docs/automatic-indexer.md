@@ -18,6 +18,8 @@ For standard armor prices, deploy the worker with catalog schema version 3 befor
 
 For emote prices, deploy the worker with catalog schema version 4 before applying `supabase/eververse-emote-prices.sql`. The worker adds the profile's emote wheel to the scheduled Collections request. The ranking requires both components so private or missing emote data cannot skew comparisons.
 
+For standard prices by category, deploy catalog schema version 5 to the worker before applying `supabase/eververse-category-prices.sql`. Version 5 also excludes mask ornaments and cosmetics obtainable with Legendary Marks.
+
 The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
 
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase
