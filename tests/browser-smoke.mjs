@@ -54,9 +54,9 @@ const armorOrnamentCatalog = { schemaVersion: 1, manifestVersion: 'test', review
 ] };
 const eververseReviewMetadata = {
   schemaVersion: 1, manifestVersion: 'test', iconRoot: '/common/destiny2_content/icons/',
-  labels: ['Legendary', 'Titan Universal Ornament', 'Titan', 'Eververse', 'Test Armor Set', 'Bright Dust', 'Tess Everis'],
+  labels: ['Legendary', 'Titan Universal Ornament', 'Titan', 'Eververse', 'Test Armor Set', 'Bright Dust', 'Tess Everis', 'Ghost Shell'],
   bundles: { 20: [4, [[6000, 5, 6]]] }, rows: [[104, 'test-armor.jpg', 0, 1, 2, [3], [], [20]],
-    [105, 'partner-armor.jpg', 0, 1, 2, [3], [], []]]
+    [105, 'partner-armor.jpg', 0, 1, 2, [3], [], []], [103, 'shell.jpg', 0, 7, -1, [3], [], []]]
 };
 const databaseScript = `
 window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
@@ -689,6 +689,7 @@ try {
   await cdp('Page.navigate', { url: `${origin}/eververse-review.html` });
   await waitFor("document.querySelectorAll('.review-item').length === 2");
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.review-item')].map(row=>row.dataset.item)"), ['103', '105']);
+  assert.match(await evaluate("document.querySelector('[data-item=\"103\"] .review-item-price').textContent"), /400 Bright Dust.*Proposed value/s);
   await assertLayout('Eververse price review on mobile');
   assert.ok(await evaluate("document.querySelector('[data-item=\"105\"] img').src.endsWith('/partner-armor.jpg')"));
   await evaluate("document.querySelector('[data-item=\"105\"] [data-action=confirmed]').click()");
@@ -729,6 +730,13 @@ try {
   await evaluate(`document.querySelector('#review-status').value = 'flagged';
     document.querySelector('#review-status').dispatchEvent(new Event('change'))`);
   assert.equal(await evaluate("document.querySelectorAll('.review-item').length"), 1);
+  await evaluate(`document.querySelector('#review-status').value = 'open';
+    document.querySelector('#review-status').dispatchEvent(new Event('change'));
+    document.querySelector('[data-item="103"] [data-action=confirmed]').click();
+    document.querySelector('#export-reviews').click()`);
+  const confirmedExport = JSON.parse(await evaluate('window.reviewExport')).decisions.find(item => item.itemHash === 103);
+  assert.equal(confirmedExport.confirmedPrice, 400);
+  assert.equal(confirmedExport.catalogPrice, null);
   await resize(1440, 1000);
   await assertLayout('Eververse price review on desktop');
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');

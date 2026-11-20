@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { importPriceDecisions, priceReviewQueue, reviewItems } from '../eververseReviewData.js';
+import { addPriceSuggestions, importPriceDecisions, priceReviewQueue, reviewItems } from '../eververseReviewData.js';
 
 test('every catalog row has an icon and each individual or bundle price has matching manifest evidence', () => {
   const read = name => JSON.parse(readFileSync(new URL(`../${name}`, import.meta.url), 'utf8'));
@@ -18,6 +18,9 @@ test('every catalog row has an icon and each individual or bundle price has matc
     if (item.basis === 'bundle') assert.ok(item.bundles.some(bundle =>
       bundle.name === item.set && hasDustPrice(bundle.offers, item.price * 5)), item.name);
   }
+  const suggestions = addPriceSuggestions(items);
+  assert.ok(suggestions.filter(item => item.basis === 'unpriced').every(item =>
+    item.price === null && item.proposedPrice > 0 && item.proposalBasis));
 });
 
 test('review imports retain notes and require the current catalog price and pricing basis', () => {
@@ -31,10 +34,21 @@ test('review imports retain notes and require the current catalog price and pric
   ] };
   const result = importPriceDecisions(input, items);
   assert.equal(result.skipped, 2);
-  assert.deepEqual([...result.decisions.values()], [input.decisions[0]]);
+  assert.deepEqual([...result.decisions.values()], [{ ...input.decisions[0], confirmedPrice: null }]);
   const changed = reviewItems({ items: [[1, [], 'Ornament', 'Armor ornaments', 1200]] }, null)[0];
   assert.equal(importPriceDecisions(input, new Map([[1, changed]])).decisions.size, 0);
   assert.throws(() => importPriceDecisions({}, items), /review export/);
+});
+
+test('imports preserve the confirmed proposal and can read older priced confirmations', () => {
+  const [shell, shader] = reviewItems({ items: [[1, [], 'Shell', 'Ghost shells', null], [2, [], 'Shader', 'Shaders', 300]] }, null);
+  const decisions = [
+    { itemHash: 1, signature: shell.signature, status: 'confirmed', suggestedPrice: 400 },
+    { itemHash: 2, signature: shader.signature, status: 'confirmed' }
+  ];
+  const result = importPriceDecisions({ schemaVersion: 1, decisions }, new Map([[1, shell], [2, shader]]));
+  assert.equal(result.decisions.get(1).confirmedPrice, 400);
+  assert.equal(result.decisions.get(2).confirmedPrice, 300);
 });
 
 test('the review queue prioritizes uncertain prices and retains items the reviewer flagged', () => {

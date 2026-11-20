@@ -42,6 +42,8 @@ The Armor ornaments section lists public, named armor ornament definitions, incl
 
 Open [Eververse price review](../eververse-review.html) for unpriced items, estimated prices, and items you have flagged. The default view shows open reviews, starting with unpriced items. Item details show Bungie images, Collections sources, and listed offers. Review decisions and notes are saved in the current browser. JSON export and import transfer decisions between devices. A decision applies to the price and pricing basis it reviewed. Generate the review evidence with `node scripts/build-eververse-review.mjs` after generating the Eververse catalog.
 
+Unpriced items have review proposals based on individual Bright Dust offers for comparable items of the same category and rarity. The remaining Legendary accessories use historical retail benchmarks of 400 for Ghost shells, 500 for ships, and 600 for vehicles. The unpriced partner armor uses the historical 1,600 collaboration benchmark. The review export records the amount accepted on each confirmation. [Historical accessory offers](https://www.reddit.com/r/DestinyTheGame/comments/e7526o/the_total_cost_of_bright_dust_needed_for/) · [Historical Fortnite offers](https://sirusgaming.com/destiny-2-weekly-reset-september-27-2022/)
+
 ## Analysis coverage
 
 The [account rating methodology](account-rating.md) defines every weight, curve, coverage rule, limitation and example. It is an editorial account-achievement model, not a calibrated population percentile or matchmaking skill rating. Ratings load their required sources independently of other tabs and are included in JSON export when calculated.
