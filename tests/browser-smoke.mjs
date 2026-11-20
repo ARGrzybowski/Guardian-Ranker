@@ -55,7 +55,8 @@ const armorOrnamentCatalog = { schemaVersion: 1, manifestVersion: 'test', review
 const eververseReviewMetadata = {
   schemaVersion: 1, manifestVersion: 'test', iconRoot: '/common/destiny2_content/icons/',
   labels: ['Legendary', 'Titan Universal Ornament', 'Titan', 'Eververse', 'Test Armor Set', 'Bright Dust', 'Tess Everis'],
-  bundles: { 20: [4, [[6000, 5, 6]]] }, rows: [[104, 'test-armor.jpg', 0, 1, 2, [3], [], [20]]]
+  bundles: { 20: [4, [[6000, 5, 6]]] }, rows: [[104, 'test-armor.jpg', 0, 1, 2, [3], [], [20]],
+    [105, 'partner-armor.jpg', 0, 1, 2, [3], [], []]]
 };
 const databaseScript = `
 window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
@@ -686,14 +687,18 @@ try {
   const narrowBoards = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'leaderboards-mobile.png'), Buffer.from(narrowBoards.data, 'base64'));
   await cdp('Page.navigate', { url: `${origin}/eververse-review.html` });
-  await waitFor("document.querySelectorAll('.review-item').length === 6");
+  await waitFor("document.querySelectorAll('.review-item').length === 2");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.review-item')].map(row=>row.dataset.item)"), ['103', '105']);
   await assertLayout('Eververse price review on mobile');
-  assert.ok(await evaluate("document.querySelector('[data-item=\"104\"] img').src.endsWith('/test-armor.jpg')"));
-  await evaluate("document.querySelector('[data-item=\"104\"] [data-action=confirmed]').click()");
+  assert.ok(await evaluate("document.querySelector('[data-item=\"105\"] img').src.endsWith('/partner-armor.jpg')"));
+  await evaluate("document.querySelector('[data-item=\"105\"] [data-action=confirmed]').click()");
   assert.equal(await evaluate("document.querySelector('#confirmed-count').textContent"), '1');
-  await evaluate("document.querySelector('[data-item=\"104\"] [data-action=details]').click()");
+  assert.equal(await evaluate("document.querySelectorAll('.review-item').length"), 1);
+  await evaluate(`document.querySelector('#review-status').value = 'confirmed';
+    document.querySelector('#review-status').dispatchEvent(new Event('change'));
+    document.querySelector('[data-item="105"] [data-action=details]').click()`);
   await waitFor("document.querySelector('#detail-definition').textContent.includes('Full Bungie item definition')");
-  assert.match(await evaluate("document.querySelector('#detail-evidence').textContent"), /6,000 Bright Dust divided among 5 pieces/);
+  assert.match(await evaluate("document.querySelector('#detail-evidence').textContent"), /1,600 Bright Dust.*Collaboration estimate/s);
   await assertLayout('Eververse item details on mobile');
   await evaluate(`document.querySelector('#detail-review textarea').value = 'Check the set';
     document.querySelector('#detail-review input').value = '1600';
@@ -710,7 +715,7 @@ try {
   assert.equal(exportedDecision.status, 'flagged');
   assert.equal(exportedDecision.note, 'Check the set');
   assert.equal(exportedDecision.suggestedPrice, 1600);
-  await evaluate(`document.querySelector('[data-item="104"] [data-action=details]').click();
+  await evaluate(`document.querySelector('[data-item="105"] [data-action=details]').click();
     document.querySelector('#detail-review button[value=unreviewed]').click()`);
   assert.equal(await evaluate("document.querySelector('#flagged-count').textContent"), '0');
   await evaluate(`(() => {
