@@ -5,7 +5,7 @@ import { closestTriumphs, objectiveCompletion, activityInsights } from './report
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 import { drawPerformanceRating, loadGuardianStandings } from './performanceView.js';
 import { renderPlayerComparison } from './comparisonView.js';
-import { eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=2';
+import { eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=3';
 import { refreshGuardianScore } from './indexQueue.js';
 import { reportTable } from './reportTables.js';
 
@@ -194,10 +194,12 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     exported.sections.eververseNetWorth = valuation;
     eververseValue.textContent = valuation.brightDust == null ? 'No verified estimate' : `${number(valuation.brightDust)} Bright Dust`;
     const amount = price => price == null ? 'No verified price' : `${number(price)} Bright Dust`;
-    eververseDetails.innerHTML = `${note(`${number(valuation.pricedCount)} of ${number(valuation.ownedCount)} owned Eververse cosmetics have verified Bright Dust prices${valuation.catalogDate ? ` · Bungie catalog dated ${valuation.catalogDate}` : ''}.`)}
+    eververseDetails.innerHTML = `${note(`${number(valuation.pricedCount)} of ${number(valuation.ownedCount)} owned Eververse cosmetics have a Bright Dust value${valuation.catalogDate ? ` · Bungie catalog dated ${valuation.catalogDate}` : ''}.`)}
       ${valuation.collectionCoverage === 'partial' ? note('Some profile or character Collections are unavailable. The estimate covers visible unlocks.') : ''}
       ${note('The estimate uses verified Bright Dust offers. For matching five-piece Eververse armor sets, each owned piece can count for one fifth of the listed set price. A cheaper standalone offer takes precedence. Each cosmetic counts once.')}
-      ${note('Items marked “No verified price” add nothing to the total. Gameplay and mixed-source rewards, Silver-only offers, and Bright Engram focusing are excluded. Public data shows ownership and offers. Purchase history is private.')}
+      ${note('Regular armor ornaments without a listed Bright Dust price use a standard estimate of 1,200 for Legendary universal pieces or 1,500 for Exotic pieces. Collaboration items require a verified Bright Dust offer.')}
+      ${valuation.standardArmorEstimateCount ? note(`Standard armor estimates included: ${number(valuation.standardArmorEstimateCount)}.`) : ''}
+      ${note('Items marked “No verified price” add nothing to the total. Gameplay and mixed-source rewards and Bright Engram focusing are excluded. Public data shows ownership and offers. Purchase history is private.')}
       ${valuation.categories.length ? reportTable(['Cosmetic type', 'Priced / owned', 'Estimated value'], valuation.categories.map(row => [
         e(row.category), e(`${number(row.priced)} / ${number(row.owned)}`), e(amount(row.priced ? row.brightDust : null))
       ]), { caption: 'Eververse pricing by cosmetic type' }) : ''}
@@ -206,7 +208,8 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     items?.addEventListener('toggle', () => {
       if (items.open && !items.querySelector('table')) items.insertAdjacentHTML('beforeend', reportTable(['Cosmetic', 'Type', 'Bright Dust value', 'Price basis'],
         valuation.items.map(item => [e(item.name), e(item.category), e(amount(item.brightDust)),
-          e(item.ornamentSet ? `Estimated share of ${item.ornamentSet}` : item.brightDust == null ? 'Excluded from total' : 'Individual offer')]),
+          e(item.ornamentSet ? `Estimated share of ${item.ornamentSet}` : item.standardArmorEstimate ? 'Standard armor estimate' :
+            item.brightDust == null ? 'Excluded from total' : 'Individual offer')]),
         { caption: 'Individual Eververse values' }));
     });
   }

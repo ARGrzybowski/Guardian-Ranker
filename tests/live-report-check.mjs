@@ -29,7 +29,8 @@ try {
   const priceCatalog = JSON.parse(await readFile(new URL('../eververseCatalog.json', import.meta.url), 'utf8'));
   const eververse = valueEververseCollection(ownership, priceCatalog);
   assert.ok(eververse.brightDust > 0 && eververse.pricedCount > 0, 'Owned Eververse collectibles resolve to catalog prices');
-  console.log(JSON.stringify({ eververseBrightDust: eververse.brightDust, cosmeticsPriced: eververse.pricedCount, cosmeticsOwned: eververse.ownedCount, collectionCoverage: eververse.collectionCoverage }));
+  console.log(JSON.stringify({ eververseBrightDust: eververse.brightDust, cosmeticsPriced: eververse.pricedCount, cosmeticsOwned: eververse.ownedCount,
+    standardArmorEstimates: eververse.standardArmorEstimateCount, collectionCoverage: eververse.collectionCoverage }));
   const api = createReportApi(loaded.membership), manifest = createManifestClient();
   const career = await api.career(signal);
   assert.ok(career?.mergedAllCharacters, 'Account historical stats schema');

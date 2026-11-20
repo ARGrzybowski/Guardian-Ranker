@@ -57,10 +57,13 @@ test('distinguishes private collections, zero verified unlocks, and owned items 
 
 test('published pricing snapshot has valid, unique item and collectible identifiers', () => {
   const catalog = JSON.parse(readFileSync(new URL('../eververseCatalog.json', import.meta.url), 'utf8'));
-  assert.equal(catalog.schemaVersion, 2);
+  assert.equal(catalog.schemaVersion, 3);
   assert.ok(catalog.manifestVersion);
   assert.ok(catalog.pricedCount > 0);
   assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[5]), 'Verified set prices reach individual ornaments');
+  assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[6] && row[4] === 1200));
+  assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[6] && row[4] === 1500));
+  assert.equal(catalog.items.find(row => row[2] === 'N7 Helm')[4], null, 'The Mass Effect collaboration has no inferred price');
   assert.ok(catalog.items.some(row => row[3] === 'Ghost projections' && row[4] > 0));
   assert.equal(catalog.items.filter(row => row[4] !== null).length, catalog.pricedCount);
   assert.equal(new Set(catalog.items.map(row => row[0])).size, catalog.items.length);
@@ -97,4 +100,29 @@ test('an eligible five-piece ornament set contributes each owned share once and 
   catalog = buildEververseCatalog(vendors, collectibles, inventory, {});
   assert.equal(catalog.items.find(row => row[0] === 1)[4], null, 'Mixed-source sets do not assign a per-piece price');
   assert.ok(!catalog.items.some(row => row[0] === 4));
+});
+
+test('standard armor estimates fill gaps and never substitute for marked collaborations, shared unlocks, or gameplay awards', () => {
+  const legendary = { itemType: 19, itemSubType: 21, itemTypeDisplayName: 'Hunter Universal Ornament', inventory: { tierType: 5 } };
+  const exotic = { ...legendary, itemTypeDisplayName: 'Hunter Ornament', inventory: { tierType: 6 } };
+  const partner = { tooltipNotifications: [{ displayString: 'Inspired by lore and legends from a distant universe!' }] };
+  const pack = { itemTypeDisplayName: 'Package', displayProperties: { name: 'Partner Pack' }, ...partner };
+  const inventory = {
+    101: legendary, 102: exotic, 103: { ...legendary, ...partner }, 104: legendary, 105: exotic,
+    106: { ...legendary, tooltipNotifications: [{ displayString: 'Ornament is available for all classes once acquired.' }] },
+    107: legendary, 108: { ...legendary, ...partner }, 200: pack
+  };
+  const catalog = buildEververseCatalog({
+    tess: { itemList: [offer(105, 1650), offer(108, 2000)] },
+    200: { displayProperties: pack.displayProperties, itemList: [{ itemHash: 104, quantity: 1 }] }
+  }, Object.fromEntries(Object.keys(inventory).filter(id => id !== '200').map(id =>
+    [id, collectible(Number(id), id === '107' ? 'Source: Season Pass Reward' : undefined)])), inventory, {});
+  assert.deepEqual(catalog.items.map(row => [row[0], row[4], row[6] || false]), [
+    [101, 1200, true], [102, 1500, true], [103, null, false], [104, null, false],
+    [105, 1650, false], [106, null, false], [108, 2000, false]
+  ]);
+  const value = valueEververseCollection({ owned: new Set([101, 102, 103]), partial: false }, catalog);
+  assert.equal(value.brightDust, 2700);
+  assert.equal(value.standardArmorEstimateCount, 2);
+  assert.equal(value.unpricedCount, 1);
 });

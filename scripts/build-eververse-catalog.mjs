@@ -8,6 +8,21 @@ const EVERVERSE_SOURCE = 'Source: Eververse';
 const PROJECTION_VENDORS = new Set(['3361454721', '1446296883']);
 const COSMETIC_TYPES = new Map([[14, 'Emblems'], [21, 'Ships'], [22, 'Vehicles'], [23, 'Emotes'], [24, 'Ghost shells'], [29, 'Finishers']]);
 const COSMETIC_MODS = new Map([['Ghost Projection', 'Ghost projections'], ['Transmat Effect', 'Transmat effects'], ['Emote', 'Emotes'], ['Multiplayer Emote', 'Emotes']]);
+const ARMOR_TYPE = /^(Hunter|Titan|Warlock)( Universal)? Ornament$/;
+
+function needsIndividualPrice(item) {
+  // Bungie marks partner items and shared cross-class unlocks with these tooltips.
+  return item.tooltipNotifications?.some(({ displayString }) =>
+    /distant universe|available for all classes once acquired|partnership/i.test(displayString));
+}
+
+function standardArmorPrice(item) {
+  const type = ARMOR_TYPE.exec(item.itemTypeDisplayName);
+  // Matched against Bungie's retail offers and five-piece set prices.
+  if (type?.[2] && item.inventory?.tierType === 5) return 1200;
+  if (type && !type[2] && item.inventory?.tierType === 6) return 1500;
+  return null;
+}
 
 function cosmeticCategory(item) {
   if (item?.itemType !== 19) return COSMETIC_TYPES.get(item?.itemType);
@@ -51,15 +66,18 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
   }
 
   const setShares = new Map();
-  for (const [hash, price] of prices) {
+  const requiresOffer = new Set();
+  for (const [hash, preview] of Object.entries(vendors)) {
     const bundle = inventory[hash];
-    const preview = vendors[hash];
     const name = bundle?.displayProperties?.name?.trim();
     // These offers have an exact same-hash Bungie preview vendor. Count only
     // full five-piece universal armor sets with verified Eververse provenance.
     if (bundle?.itemTypeDisplayName !== 'Package' || bundle.redacted || !name ||
         preview?.redacted || preview?.blacklisted || preview?.displayProperties?.name?.trim() !== name) continue;
     const members = preview.itemList || [];
+    if (needsIndividualPrice(bundle)) for (const { itemHash } of members) requiresOffer.add(itemHash);
+    const price = prices.get(Number(hash));
+    if (price === undefined) continue;
     if (members.length !== 5 || price % members.length || new Set(members.map(item => item.itemHash)).size !== members.length) continue;
     if (!members.every(({ itemHash, quantity }) => quantity === 1 && byItem.get(itemHash)?.eververseOnly &&
         byItem.get(itemHash).category === 'Armor ornaments' && / Universal Ornament$/.test(inventory[itemHash].itemTypeDisplayName) &&
@@ -77,11 +95,14 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
       const direct = prices.get(hash);
       const set = setShares.get(hash);
       const base = [hash, row.hashes.sort((a, b) => a - b), row.name, row.category];
-      return set && set.price < (direct ?? Infinity)
-        ? [...base, set.price, set.name]
-        : [...base, direct ?? null];
+      if (set && set.price < (direct ?? Infinity)) return [...base, set.price, set.name];
+      if (direct !== undefined) return [...base, direct];
+      const item = inventory[hash];
+      const standard = row.category === 'Armor ornaments' && !requiresOffer.has(hash) && !needsIndividualPrice(item)
+        ? standardArmorPrice(item) : null;
+      return standard === null ? [...base, null] : [...base, standard, null, true];
     });
-  return { schemaVersion: 2, ...metadata, pricedCount: items.filter(row => row[4] !== null).length, items };
+  return { schemaVersion: 3, ...metadata, pricedCount: items.filter(row => row[4] !== null).length, items };
 }
 
 async function readJson(path) {
@@ -109,7 +130,7 @@ async function generate() {
   const { items, ...header } = catalog;
   const json = `${JSON.stringify(header).slice(0, -1)},"items":[\n${items.map(row => JSON.stringify(row)).join(',\n')}\n]}\n`;
   await writeFile(new URL('../eververseCatalog.json', import.meta.url), json);
-  console.log(`Catalog ${catalog.manifestVersion}: ${items.length} cosmetics, ${catalog.pricedCount} with Bright Dust values (${items.filter(row => row[5]).length} set shares).`);
+  console.log(`Catalog ${catalog.manifestVersion}: ${catalog.pricedCount} of ${items.length} priced; ${items.filter(row => row[6]).length} standard armor estimates.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await generate();
