@@ -1,7 +1,7 @@
 import { escapeHtml as e } from './html.js';
 import { bungieImage, createManifestClient } from './manifest.js';
 import { loadEververseCatalog } from './eververseValue.js?v=armor-catalog';
-import { importPriceDecisions, PRICE_BASES, REVIEW_STATES, priceReviewQueue, reviewItems } from './eververseReviewData.js?v=2';
+import { addPriceSuggestions, importPriceDecisions, PRICE_BASES, REVIEW_STATES, priceReviewQueue, reviewItems } from './eververseReviewData.js?v=3';
 
 const PAGE_SIZE = 24;
 const STORAGE_KEY = 'guardian-ranker.eververse-price-review.v1';
@@ -18,7 +18,15 @@ let page = 0;
 let pageCount = 0;
 let canStore = true;
 const priceText = price => price == null ? 'No verified price' : `${fmt.format(price)} Bright Dust`;
-const statusOf = item => decisions.get(item.hash)?.status ?? 'unreviewed';
+const statusOf = item => {
+  const decision = decisions.get(item.hash);
+  return item.proposedPrice != null && decision?.status === 'confirmed' && decision.confirmedPrice == null
+    ? 'unreviewed' : decision?.status ?? 'unreviewed';
+};
+const valueToReview = item => {
+  const decision = decisions.get(item.hash);
+  return decision?.confirmedPrice ?? decision?.suggestedPrice ?? item.proposedPrice ?? item.price;
+};
 const image = (path, css, lazy = false) => {
   const url = bungieImage(path);
   return url ? `<img class="${css}" src="${e(url)}" alt=""${lazy ? ' loading="lazy" decoding="async"' : ''}>`
@@ -61,14 +69,17 @@ function render(focus = {}) {
   list.innerHTML = slice.map(item => {
     const state = statusOf(item);
     const meta = [item.rarity, item.category, item.className].filter(Boolean).join(' · ');
+    const amount = valueToReview(item);
+    const priceLabel = state === 'confirmed' ? 'Confirmed value' :
+      item.proposedPrice != null || amount !== item.price ? 'Proposed value' : PRICE_BASES[item.basis];
     return `<li class="review-item" data-item="${item.hash}" data-rarity="${e(item.rarity)}">
       <div class="review-identity">${image(item.icon, 'review-icon', true)}
         <div><button class="review-item-name" type="button" data-action="details" aria-label="View details for ${e(item.name)}">${e(item.name)}</button>
         <span class="review-meta">${e(meta)}</span></div></div>
-      <div class="review-item-price"><strong>${priceText(item.price)}</strong><span class="review-meta">${PRICE_BASES[item.basis]}</span></div>
+      <div class="review-item-price"><strong>${priceText(amount)}</strong><span class="review-meta">${priceLabel}</span></div>
       <div class="review-decision"><span class="review-meta">${REVIEW_STATES[state]}</span>
         <div class="review-row-actions">
-          <button class="site-button review-confirm" type="button" data-action="confirmed" aria-pressed="${state === 'confirmed'}" aria-label="Confirm price for ${e(item.name)}">Confirm</button>
+          <button class="site-button review-confirm" type="button" data-action="confirmed" aria-pressed="${state === 'confirmed'}" aria-label="Confirm price for ${e(item.name)}" ${amount == null ? 'disabled' : ''}>Confirm</button>
           <button class="site-button review-flag" type="button" data-action="flagged" aria-pressed="${state === 'flagged'}" aria-label="Flag ${e(item.name)} for review">Flag for review</button>
         </div>
       </div></li>`;
@@ -111,9 +122,12 @@ function storeDecisions(text) {
 function setDecision(item, status, changes = {}) {
   decisions = readDecisions() ?? decisions;
   if (status === 'unreviewed') decisions.delete(item.hash);
-  else decisions.set(item.hash, { itemHash: item.hash, signature: item.signature, status,
-    note: changes.note ?? decisions.get(item.hash)?.note ?? '',
-    suggestedPrice: Object.hasOwn(changes, 'suggestedPrice') ? changes.suggestedPrice : decisions.get(item.hash)?.suggestedPrice ?? null });
+  else {
+    const amount = changes.suggestedPrice ?? valueToReview(item);
+    decisions.set(item.hash, { itemHash: item.hash, signature: item.signature, status,
+      note: changes.note ?? decisions.get(item.hash)?.note ?? '',
+      suggestedPrice: amount, confirmedPrice: status === 'confirmed' ? amount : null });
+  }
   storeDecisions(`${item.name} · ${REVIEW_STATES[status]}`);
 }
 
@@ -121,7 +135,8 @@ function exportReviews() {
   const data = { schemaVersion: 1, catalogVersion: catalog.schemaVersion, manifestVersion: catalog.manifestVersion,
     decisions: [...decisions.values()].map(entry => {
       const item = itemsByHash.get(entry.itemHash);
-      return { ...entry, name: item.name, category: item.category, catalogPrice: item.price, priceBasis: PRICE_BASES[item.basis] };
+      return { ...entry, name: item.name, category: item.category, catalogPrice: item.price, priceBasis: PRICE_BASES[item.basis],
+        proposedPrice: item.proposedPrice ?? item.price, proposalBasis: item.proposalBasis ?? PRICE_BASES[item.basis] };
     })
   };
   const link = document.createElement('a');
@@ -158,13 +173,19 @@ async function showItem(item) {
   const decision = decisions.get(item.hash);
   byId('detail-title').textContent = item.name;
   form.elements.namedItem('note').value = decision?.note ?? '';
-  form.elements.namedItem('suggestedPrice').value = decision?.suggestedPrice ?? '';
+  const priceInput = form.elements.namedItem('suggestedPrice');
+  priceInput.setCustomValidity('');
+  priceInput.value = valueToReview(item) ?? '';
   form.querySelector('[value="unreviewed"]').hidden = !decision;
   const setShare = item.set ? `<p class="review-meta">${e(item.set)} · ${priceText(item.price * 5)} divided among 5 pieces</p>` : '';
   const bundles = item.bundles.map(bundle => `<p>${e(bundle.name)}</p>${offerList(bundle.offers)}`).join('');
+  const amount = valueToReview(item);
+  const amountBasis = amount === item.proposedPrice ? item.proposalBasis :
+    amount !== item.price ? 'Your review value' : PRICE_BASES[item.basis];
   byId('detail-evidence').innerHTML = `<div class="detail-summary">${image(item.icon, 'review-icon')}
-      <div><strong>${priceText(item.price)}</strong><p class="review-meta">${PRICE_BASES[item.basis]} · ${REVIEW_STATES[statusOf(item)]}</p>${setShare}</div></div>
+      <div><strong>${priceText(amount)}</strong><p class="review-meta">${e(amountBasis)} · ${REVIEW_STATES[statusOf(item)]}</p>${setShare}</div></div>
     <dl class="detail-facts">
+      ${fact('Published catalog price', priceText(item.price))}
       ${fact('Type', e([item.type || item.category, item.rarity, item.className].filter(Boolean).join(' · ')))}
       ${fact('Collections source', item.sources.map(e).join('<br>') || 'No source listed')}
       ${fact('Bungie item ID', `<code>${item.hash}</code>`)}
@@ -206,14 +227,14 @@ async function load() {
       fetch('./eververseReviewMetadata.json?v=1', { signal }).then(response => response.ok ? response.json() : null).catch(() => null)
     ]);
     const compatible = metadata?.schemaVersion === 1 && metadata.manifestVersion === catalog.manifestVersion;
-    items = reviewItems(catalog, compatible ? metadata : null);
+    items = addPriceSuggestions(reviewItems(catalog, compatible ? metadata : null));
     for (const item of items) item.search = [item.name, item.category, item.className, item.rarity, item.hash, item.set,
       ...item.collectibleHashes, ...item.sources, ...item.bundles.map(bundle => bundle.name)].join(' ').toLowerCase();
     items.sort((a, b) => a.name.localeCompare(b.name) || a.hash - b.hash);
     itemsByHash = new Map(items.map(item => [item.hash, item]));
     decisions = readDecisions() ?? new Map();
     filters[3].insertAdjacentHTML('beforeend', Object.entries(REVIEW_STATES).map(([key, text]) => choice(text, key)).join(''));
-    byId('catalog-info').textContent = `Unpriced items, estimates, and your flags${catalog.catalogDate ? ` · Catalog dated ${catalog.catalogDate}` : ''}`;
+    byId('catalog-info').textContent = `Proposed Bright Dust values for unpriced and estimated items${catalog.catalogDate ? ` · Catalog dated ${catalog.catalogDate}` : ''}`;
     if (!compatible) message.textContent = 'Catalog prices are available. Bungie images and offer evidence could not be matched to this snapshot.';
     byId('review-controls').hidden = false;
     byId('import-reviews').disabled = false;
@@ -232,20 +253,27 @@ list.addEventListener('click', event => {
   const item = itemsByHash.get(Number(focus.hash));
   if (focus.action === 'details') void showItem(item);
   else {
-    setDecision(item, focus.action);
+    setDecision(item, focus.action, { suggestedPrice: valueToReview(item) });
     render(focus);
   }
 });
 form.addEventListener('submit', event => {
   event.preventDefault();
-  const suggestedPrice = form.elements.namedItem('suggestedPrice').valueAsNumber;
+  const priceInput = form.elements.namedItem('suggestedPrice');
+  const suggestedPrice = priceInput.valueAsNumber;
   const status = event.submitter?.value ?? 'confirmed';
+  if (status === 'confirmed' && !Number.isSafeInteger(suggestedPrice)) {
+    priceInput.setCustomValidity('Enter a Bright Dust amount to confirm.');
+    priceInput.reportValidity();
+    return;
+  }
   const focus = { hash: detailItem.hash, action: 'details' };
   setDecision(detailItem, status, { note: form.elements.namedItem('note').value.trim(),
     suggestedPrice: Number.isSafeInteger(suggestedPrice) ? suggestedPrice : null });
   dialog.close();
   render(focus);
 });
+form.elements.namedItem('suggestedPrice').addEventListener('input', event => event.target.setCustomValidity(''));
 dialog.addEventListener('close', () => { if (!dialog.open) definitionRequest?.abort(); });
 for (const filter of filters) filter.addEventListener(filter.type === 'search' ? 'input' : 'change', () => { page = 0; render(); });
 for (const [id, direction] of [['review-previous', -1], ['review-next', 1]]) {
