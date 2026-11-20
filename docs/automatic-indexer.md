@@ -16,6 +16,8 @@ Apply `supabase/eververse-leaderboard.sql` before deploying the Bright Dust lead
 
 For standard armor prices, deploy the worker with catalog schema version 3 before applying `supabase/eververse-pricing-v3.sql`. The cloud worker revisits profiles on the old methodology. The view and the directory rank only valuations on the same methodology.
 
+For emote prices, deploy the worker with catalog schema version 4 before applying `supabase/eververse-emote-prices.sql`. The worker adds the profile's emote wheel to the scheduled Collections request. The ranking requires both components so private or missing emote data cannot skew comparisons.
+
 The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
 
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase

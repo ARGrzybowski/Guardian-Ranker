@@ -5,7 +5,7 @@ import { closestTriumphs, objectiveCompletion, activityInsights } from './report
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 import { drawPerformanceRating, loadGuardianStandings } from './performanceView.js';
 import { renderPlayerComparison } from './comparisonView.js';
-import { eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=3';
+import { eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=4';
 import { refreshGuardianScore } from './indexQueue.js';
 import { reportTable } from './reportTables.js';
 
@@ -196,6 +196,9 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     const amount = price => price == null ? 'No verified price' : `${number(price)} Bright Dust`;
     eververseDetails.innerHTML = `${note(`${number(valuation.pricedCount)} of ${number(valuation.ownedCount)} owned Eververse cosmetics have a Bright Dust value${valuation.catalogDate ? ` · Bungie catalog dated ${valuation.catalogDate}` : ''}.`)}
       ${valuation.collectionCoverage === 'partial' ? note('Some profile or character Collections are unavailable. The estimate covers visible unlocks.') : ''}
+      ${valuation.emoteCoverage === 'public'
+        ? note('Emote prices come from direct Bright Dust offers. Ownership comes from visible Collections or the public emote wheel.')
+        : note('Bungie did not return public emote data. This estimate may omit emotes.')}
       ${note('The estimate uses verified Bright Dust offers. For matching five-piece Eververse armor sets, each owned piece can count for one fifth of the listed set price. A cheaper standalone offer takes precedence. Each cosmetic counts once.')}
       ${note('Regular armor ornaments without a listed Bright Dust price use a standard estimate of 1,200 for Legendary universal pieces or 1,500 for Exotic pieces. Collaboration items require a verified Bright Dust offer.')}
       ${valuation.standardArmorEstimateCount ? note(`Standard armor estimates included: ${number(valuation.standardArmorEstimateCount)}.`) : ''}

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildEververseCatalog } from '../scripts/build-eververse-catalog.mjs';
-import { eververseCollection, valueEververseCollection } from '../eververseValue.js';
+import { EMOTE_PLUG_SET, eververseCollection, valueEververseCollection } from '../eververseValue.js';
 
 const collectible = (itemHash, sourceString = 'Source: Eververse') => ({ itemHash, sourceString, displayProperties: { name: `Cosmetic ${itemHash}` } });
 const offer = (itemHash, quantity, currency = 2817410917) => ({ itemHash, quantity: 1, currencies: [{ itemHash: currency, quantity }] });
@@ -57,7 +57,8 @@ test('distinguishes private collections, zero verified unlocks, and owned items 
 
 test('published pricing snapshot has valid, unique item and collectible identifiers', () => {
   const catalog = JSON.parse(readFileSync(new URL('../eververseCatalog.json', import.meta.url), 'utf8'));
-  assert.equal(catalog.schemaVersion, 3);
+  assert.equal(catalog.schemaVersion, 4);
+  assert.equal(catalog.emotePlugSetHash, EMOTE_PLUG_SET);
   assert.ok(catalog.manifestVersion);
   assert.ok(catalog.pricedCount > 0);
   assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[5]), 'Verified set prices reach individual ornaments');
@@ -65,14 +66,49 @@ test('published pricing snapshot has valid, unique item and collectible identifi
   assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[6] && row[4] === 1500));
   assert.equal(catalog.items.find(row => row[2] === 'N7 Helm')[4], null, 'The Mass Effect collaboration has no inferred price');
   assert.ok(catalog.items.some(row => row[3] === 'Ghost projections' && row[4] > 0));
+  assert.ok(catalog.items.some(row => row[3] === 'Emotes' && row[1].length === 0 && row[4] > 0));
   assert.equal(catalog.items.filter(row => row[4] !== null).length, catalog.pricedCount);
   assert.equal(new Set(catalog.items.map(row => row[0])).size, catalog.items.length);
   const hashes = catalog.items.flatMap(row => row[1]);
   assert.equal(new Set(hashes).size, hashes.length);
   for (const [item, collectibles, name, category, dust] of catalog.items) {
-    assert.ok(Number.isSafeInteger(item) && collectibles.length && collectibles.every(Number.isSafeInteger));
+    assert.ok(Number.isSafeInteger(item) && (collectibles.length || category === 'Emotes') && collectibles.every(Number.isSafeInteger));
     assert.ok(name && category && (dust === null || (Number.isSafeInteger(dust) && dust > 0)));
   }
+});
+
+test('emotes require an exact wheel item and direct Eververse offer, and count once across ownership sources', () => {
+  const ids = [101, 102, 103, 104, 105, 106];
+  const inventory = Object.fromEntries(ids.map(id => [id, {
+    itemType: 19, itemTypeDisplayName: 'Emote', displayProperties: { name: `Emote ${id}` }
+  }]));
+  const catalog = buildEververseCatalog({
+    2184482416: { itemList: [offer(101, 700), offer(102, 400), offer(103, 600), offer(104, 800), offer(106, 500, 3147280338)] },
+    other: { itemList: [offer(101, 100), offer(105, 200)] }
+  }, {
+    2: collectible(102, 'Source: Bright Engrams'),
+    3: collectible(103, 'Source: Complete activities in the Crucible.')
+  }, inventory, {}, { [EMOTE_PLUG_SET]: { reusablePlugItems: [101, 102, 103, 105, 106].map(plugItemHash => ({ plugItemHash })) } });
+  assert.deepEqual(catalog.items.map(row => [row[0], row[1], row[4]]), [[101, [], 700], [102, [2], 400]]);
+
+  const profile = {
+    profileCollectibles: { data: { collectibles: { 2: { state: 0 } } } },
+    profilePlugSets: { data: { plugs: {
+      [EMOTE_PLUG_SET]: [
+        { plugItemHash: 101, canInsert: true, enabled: false },
+        { plugItemHash: 102, canInsert: true, enabled: true }
+      ],
+      1: [{ plugItemHash: 101, canInsert: true, enabled: true }]
+    } } }
+  };
+  let value = valueEververseCollection(eververseCollection(profile), catalog);
+  assert.equal(value.brightDust, 400, 'The disabled emote and the unrelated set do not prove an unlock');
+  profile.profilePlugSets.data.plugs[EMOTE_PLUG_SET][0].enabled = true;
+  value = valueEververseCollection(eververseCollection(profile), catalog);
+  assert.equal(value.brightDust, 1100);
+  assert.equal(value.ownedCount, 2, 'The Collections alias and wheel unlock count once');
+  delete profile.profilePlugSets;
+  assert.equal(valueEververseCollection(eververseCollection(profile), catalog).emoteCoverage, 'unavailable');
 });
 
 test('an eligible five-piece ornament set contributes each owned share once and honors a cheaper individual offer', () => {

@@ -1,11 +1,14 @@
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { EMOTE_PLUG_SET, EVERVERSE_CATALOG_VERSION } from '../eververseValue.js';
 
 const BUNGIE = 'https://www.bungie.net';
 const BRIGHT_DUST = 2817410917;
 const EVERVERSE_SOURCE = 'Source: Eververse';
 // Tess and the manifest's Eververse Ghost Projection rotation.
 const PROJECTION_VENDORS = new Set(['3361454721', '1446296883']);
+// Tess and the two Eververse emote rotations for the profile emote wheel.
+const EMOTE_VENDORS = new Set(['3361454721', '2184482416', '3118972542']);
 const COSMETIC_TYPES = new Map([[14, 'Emblems'], [21, 'Ships'], [22, 'Vehicles'], [23, 'Emotes'], [24, 'Ghost shells'], [29, 'Finishers']]);
 const COSMETIC_MODS = new Map([['Ghost Projection', 'Ghost projections'], ['Transmat Effect', 'Transmat effects'], ['Emote', 'Emotes'], ['Multiplayer Emote', 'Emotes']]);
 const ARMOR_TYPE = /^(Hunter|Titan|Warlock)( Universal)? Ornament$/;
@@ -35,9 +38,11 @@ function cosmeticCategory(item) {
   return COSMETIC_MODS.get(item.itemTypeDisplayName);
 }
 
-export function buildEververseCatalog(vendors, collectibles, inventory, metadata) {
+export function buildEververseCatalog(vendors, collectibles, inventory, metadata, plugSets = {}) {
   const prices = new Map();
   const storeProjections = new Set();
+  const emotePrices = new Map();
+  const wheel = new Set((plugSets[EMOTE_PLUG_SET]?.reusablePlugItems || []).map(plug => plug.plugItemHash));
   // Bungie also lists rotation pools as unnamed vendors. We require independent
   // Eververse provenance from Collections before accepting any price.
   for (const [vendorHash, vendor] of Object.entries(vendors)) {
@@ -48,21 +53,40 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
       if (cost.itemHash !== BRIGHT_DUST || !Number.isSafeInteger(cost.quantity) || cost.quantity <= 0 || cost.scalarDenominator || cost.hasConditionalVisibility) continue;
       prices.set(sale.itemHash, Math.min(prices.get(sale.itemHash) ?? Infinity, cost.quantity));
       if (PROJECTION_VENDORS.has(vendorHash)) storeProjections.add(sale.itemHash);
+      if (EMOTE_VENDORS.has(vendorHash) && wheel.has(sale.itemHash) && cosmeticCategory(inventory[sale.itemHash]) === 'Emotes') {
+        emotePrices.set(sale.itemHash, Math.min(emotePrices.get(sale.itemHash) ?? Infinity, cost.quantity));
+      }
     }
   }
 
   const byItem = new Map();
+  const excludedEmotes = new Set();
   for (const [hash, collectible] of Object.entries(collectibles)) {
     const item = inventory[collectible.itemHash];
     const category = cosmeticCategory(item);
     const name = collectible.displayProperties?.name?.trim();
-    if (!category || !name || collectible.redacted || item.redacted || /^Classified\b/i.test(name)) continue;
-    const row = byItem.get(collectible.itemHash) ?? { hashes: [], category, name, eververseOnly: true };
     const source = collectible.sourceString?.trim();
+    const storeEmote = emotePrices.has(collectible.itemHash);
+    const eligibleEmoteSource = !source || source === EVERVERSE_SOURCE || source === 'Source: Bright Engrams';
+    if (storeEmote && (collectible.redacted || !eligibleEmoteSource)) excludedEmotes.add(collectible.itemHash);
+    if (!category || !name || collectible.redacted || item.redacted || item.blacklisted || /^Classified\b/i.test(name)) continue;
+    const row = byItem.get(collectible.itemHash) ?? { hashes: [], category, name, eververseOnly: true };
     row.eververseOnly &&= source === EVERVERSE_SOURCE ||
-      (!source && category === 'Ghost projections' && storeProjections.has(collectible.itemHash));
+      (!source && category === 'Ghost projections' && storeProjections.has(collectible.itemHash)) ||
+      (storeEmote && eligibleEmoteSource);
     row.hashes.push(Number(hash));
     byItem.set(collectible.itemHash, row);
+  }
+  for (const hash of emotePrices.keys()) {
+    if (excludedEmotes.has(hash)) {
+      byItem.delete(hash);
+      continue;
+    }
+    const item = inventory[hash];
+    const name = item.displayProperties?.name?.trim();
+    if (!byItem.has(hash) && name && !item.redacted && !item.blacklisted && !/^Classified\b/i.test(name)) {
+      byItem.set(hash, { hashes: [], category: 'Emotes', name, eververseOnly: true });
+    }
   }
 
   const setShares = new Map();
@@ -92,7 +116,7 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
   const items = [...byItem].filter(([, row]) => row.eververseOnly)
     .sort(([a], [b]) => a - b)
     .map(([hash, row]) => {
-      const direct = prices.get(hash);
+      const direct = emotePrices.get(hash) ?? prices.get(hash);
       const set = setShares.get(hash);
       const base = [hash, row.hashes.sort((a, b) => a - b), row.name, row.category];
       if (set && set.price < (direct ?? Infinity)) return [...base, set.price, set.name];
@@ -102,7 +126,8 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
         ? standardArmorPrice(item) : null;
       return standard === null ? [...base, null] : [...base, standard, null, true];
     });
-  return { schemaVersion: 3, ...metadata, pricedCount: items.filter(row => row[4] !== null).length, items };
+  return { schemaVersion: EVERVERSE_CATALOG_VERSION, emotePlugSetHash: EMOTE_PLUG_SET, ...metadata,
+    pricedCount: items.filter(row => row[4] !== null).length, items };
 }
 
 async function readJson(path) {
@@ -118,19 +143,21 @@ async function generate() {
   const { data: { Response: manifest } } = await readJson('/Platform/Destiny2/Manifest/');
   const paths = manifest?.jsonWorldComponentContentPaths?.en;
   if (!paths || !manifest.version) throw new Error('Bungie manifest is unavailable.');
-  const [vendors, collectibles, inventory] = await Promise.all([
-    readJson(paths.DestinyVendorDefinition), readJson(paths.DestinyCollectibleDefinition), readJson(paths.DestinyInventoryItemLiteDefinition)
+  const [vendors, collectibles, inventory, plugSets] = await Promise.all([
+    readJson(paths.DestinyVendorDefinition), readJson(paths.DestinyCollectibleDefinition), readJson(paths.DestinyInventoryItemLiteDefinition), readJson(paths.DestinyPlugSetDefinition)
   ]);
   if (inventory.data[BRIGHT_DUST]?.displayProperties?.name !== 'Bright Dust') throw new Error('Bright Dust currency could not be verified.');
   const catalog = buildEververseCatalog(vendors.data, collectibles.data, inventory.data, {
     manifestVersion: manifest.version,
     catalogDate: Number.isFinite(Date.parse(vendors.modified)) ? new Date(vendors.modified).toISOString().slice(0, 10) : null
-  });
-  if (!catalog.pricedCount) throw new Error('The Bungie manifest returned no compatible prices.');
+  }, plugSets.data);
+  if (!catalog.pricedCount || !catalog.items.some(row => row[3] === 'Emotes' && row[4] !== null)) {
+    throw new Error('The Bungie manifest returned no compatible cosmetic or emote prices.');
+  }
   const { items, ...header } = catalog;
   const json = `${JSON.stringify(header).slice(0, -1)},"items":[\n${items.map(row => JSON.stringify(row)).join(',\n')}\n]}\n`;
   await writeFile(new URL('../eververseCatalog.json', import.meta.url), json);
-  console.log(`Catalog ${catalog.manifestVersion}: ${catalog.pricedCount} of ${items.length} priced; ${items.filter(row => row[6]).length} standard armor estimates.`);
+  console.log(`Catalog ${catalog.manifestVersion}: ${catalog.pricedCount} of ${items.length} priced; ${items.filter(row => row[3] === 'Emotes' && row[4] !== null).length} priced emotes.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await generate();
