@@ -13,6 +13,4 @@ update public.guardian_specialty_catalog set description =
   'Estimated Bright Dust value of owned Eververse cosmetics from recently checked public Collections. Includes standard estimates for eligible armor ornaments.'
 where board_id='profile.eververse';
 
-drop index public.guardian_index_eververse_order;
-
 commit;
