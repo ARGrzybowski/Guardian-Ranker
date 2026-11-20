@@ -47,6 +47,11 @@ const eververseCatalog = { schemaVersion: 6, emotePlugSetHash: 2860926541, manif
   [105, [6], 'Partner Armor Ornament', 'Armor ornaments', 1600, null, 'collaboration'],
   [106, [], 'Test Emote', 'Emotes', 700]
 ] };
+const armorOrnamentCatalog = { schemaVersion: 1, manifestVersion: 'test', reviewPrice: 1200, items: [
+  [104, [5], 'Test Armor Ornament', 'Titan', 'Legendary', ['Eververse'], ['Test Armor Set'], []],
+  [201, [2], 'Test Activity Ornament', 'Hunter', 'Legendary', ['Trials of Osiris'], [], ['Legendary Marks']],
+  [202, [], 'Test Exotic Ornament', 'Warlock', 'Exotic', [], [], []]
+] };
 const databaseScript = `
 window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
 window.__standingRetry = true;
@@ -115,9 +120,9 @@ const server = createServer(async (request, response) => {
       response.end(databaseScript);
       return;
     }
-    if (pathname === '/eververseCatalog.json') {
+    if (pathname === '/eververseCatalog.json' || pathname === '/armorOrnamentCatalog.json') {
       response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify(eververseCatalog));
+      response.end(JSON.stringify(pathname === '/eververseCatalog.json' ? eververseCatalog : armorOrnamentCatalog));
       return;
     }
     const file = resolve(root, `.${pathname === '/' ? '/index.html' : pathname}`);
@@ -480,6 +485,11 @@ try {
   await openSection('collections', "document.querySelector('#report-collections').textContent.includes('Missing Ship')");
   await evaluate("document.querySelector('#report-collections input').value='exotic'; document.querySelector('#report-collections input').dispatchEvent(new Event('input'))");
   assert.equal(await evaluate("document.querySelectorAll('#report-collections .catalogue-item').length"), 1);
+  await openSection('armor', "document.querySelector('#report-armor').textContent.includes('Test Activity Ornament')");
+  assert.match(await evaluate("document.querySelector('#report-armor').textContent"), /3 ornaments · 1 owned · 1 confirmed missing · 1 unconfirmed/);
+  await evaluate("document.querySelector('#report-armor input').value = 'trials'; document.querySelector('#report-armor input').dispatchEvent(new Event('input'))");
+  assert.equal(await evaluate("document.querySelectorAll('#report-armor tbody tr').length"), 1);
+  assert.match(await evaluate("document.querySelector('#report-armor tbody').textContent"), /Test Activity Ornament.*Confirmed missing.*1,200 Bright Dust/s);
   await openSection('progression', "document.querySelector('#report-progression').textContent.includes('Vanguard Reputation')");
   await waitFor("document.querySelector('#report-progression').textContent.includes('Ally')");
   await evaluate("document.querySelector('.load-metrics').click()");
@@ -505,6 +515,8 @@ try {
   assert.equal(exported.sections.activityRecords.rows.length, 6);
   assert.equal(exported.sections.activityRecords.coverage.charactersLoaded, 3);
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
+  assert.equal(exported.sections.armorOrnaments.items.length, 3);
+  assert.ok(exported.sections.armorOrnaments.items.every(item => item.reviewPrice === 1200));
   assert.equal(exported.sections.eververseNetWorth.brightDust, 3800);
   assert.equal(exported.sections.eververseNetWorth.emoteCoverage, 'public');
   assert.equal(exported.sections.eververseNetWorth.standardArmorEstimateCount, 0);
@@ -591,6 +603,9 @@ try {
   await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 5 && document.querySelector('.eververse-items .report-cell-label').getClientRects().length");
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'grid');
   await assertLayout('Eververse breakdown');
+  await openSection('armor', "document.querySelector('#report-armor .ornament-results')?.textContent.includes('Test Exotic Ornament')");
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('#report-armor tbody tr')).display"), 'grid');
+  await assertLayout('Armor ornament catalog on mobile');
   await openSection('activities', "document.querySelectorAll('.match-open').length === 25");
   await openSection('characters', "document.querySelector('#report-characters').textContent.includes('Test Rifle')");
   await openSection('records', "document.querySelector('#report-records .catalogue-count')?.textContent.includes('31 matching')");

@@ -13,6 +13,7 @@ The report aims to expose a useful, inspectable account dossier from public Bung
 | Triumphs & titles | Search every exposed triumph by name/description; completed/incomplete/redeemed states; objective counters and normalized progress; closest incomplete triumph ordering; filter equippable titles; obscured triumph handling |
 | Collections | Search exposed collectible names/descriptions and acquisition sources; acquired/missing filters; profile and character state merge |
 | Eververse net worth | Estimated Bright Dust value on the Overview, with pricing coverage, category totals, individual prices and JSON export |
+| Armor ornaments | Manifest catalog with class, rarity, ownership, source evidence, and an initial review price |
 | Progression & metrics | Named public reputation/progression counters, levels, next-level progress and resets; searchable named Bungie metric counters; commendation total and category scores/percentages |
 | Comparison | Compare point contributions, cohort percentiles, and raw profile statistics. Share a link that opens both accounts. |
 | Sharing | Stable `?name=Guardian%231234` URLs; copy link; print loaded content; JSON export with retrieval time, schema version, profile response, and loaded sections |
@@ -36,6 +37,8 @@ Ghost projections with a blank Collections source qualify only with a verified o
 Regular unpriced cosmetics can use standard estimates by type and rarity. Legendary weapon ornaments follow the [historical 700 Bright Dust store price](https://www.youtube.com/watch?v=t-CA4vJkFPY). Exotic weapon ornaments use 1,250. Exotic Ghost shells, ships, and vehicles use 2,850, 2,000, and 2,500 respectively. Legendary shaders use 300 and Legendary finishers use 3,250. Each estimated row is labeled in the breakdown. Mask ornaments and cosmetics sold for [gameplay-earned Legendary Marks](https://help.bungie.net/hc/en-us/articles/49848696022548-Destiny-2-Monument-of-Triumph-and-Update-9-7-0-Support-Guide) are excluded.
 
 The Eververse breakdown separates owned items, the catalog total, confirmed missing items, and unconfirmed ownership. The priced count is the subset of owned items that contributes to the Bright Dust estimate. A missing item requires visible unowned states for every equivalent collectible and complete public Collections data. Hidden or omitted states and emotes without sufficient public data are unconfirmed. The complete category breakdown is included in the report JSON.
+
+The Armor ornaments section lists public, named armor ornament definitions, including legacy and gameplay ornaments. Each item starts at 1,200 Bright Dust for the pricing review. Collections labels, exact bundle previews, and observed offer currencies are recorded when available. Items without public collectible states have unconfirmed ownership. Festival mask ornaments are excluded. Eververse net worth and its leaderboard use the Eververse pricing catalog. Rebuild the full armor list with `node scripts/build-armor-ornament-catalog.mjs`.
 
 ## Analysis coverage
 

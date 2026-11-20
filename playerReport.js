@@ -5,7 +5,8 @@ import { closestTriumphs, objectiveCompletion, activityInsights } from './report
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 import { drawPerformanceRating, loadGuardianStandings } from './performanceView.js';
 import { renderPlayerComparison } from './comparisonView.js';
-import { eververseCatalogCoverage, eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=6';
+import { eververseCatalogCoverage, eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=armor-catalog';
+import { renderArmorOrnaments } from './armorOrnamentsView.js?v=1';
 import { refreshGuardianScore } from './indexQueue.js';
 import { reportTable } from './reportTables.js';
 
@@ -37,7 +38,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   const loadRating = () => standingsRequest ??= loadGuardianStandings(ratingMembershipId, signal);
   const generatedAt = new Date().toISOString();
   const exported = { schemaVersion: 1, bungieName, membership, generatedAt, profile: profileData, sections: {} };
-  const sections = { overview: 'Overview', rating: 'Account rating', characters: 'Characters & gear', career: 'PvP & PvE', activities: 'Activity history', endgame: 'Activity records', records: 'Triumphs & titles', collections: 'Collections', progression: 'Progression & metrics', compare: 'Compare players' };
+  const sections = { overview: 'Overview', rating: 'Account rating', characters: 'Characters & gear', career: 'PvP & PvE', activities: 'Activity history', endgame: 'Activity records', records: 'Triumphs & titles', collections: 'Collections', armor: 'Armor ornaments', progression: 'Progression & metrics', compare: 'Compare players' };
   const nameUrl = new URL(window.location.href);
   nameUrl.search = new URLSearchParams({ name: bungieName }); nameUrl.hash = '';
   container.innerHTML = `
@@ -99,7 +100,9 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     const standing = await loadRating();
     signal.throwIfAborted();
     displayRating(standing);
-  }, characters: loadCharacters, career: loadCareer, activities: loadActivities, endgame: () => renderActivityRecords(panel('endgame'), { api, characters, manifest, signal, onExport: data => { exported.sections.activityRecords = data; } }), records: () => loadCatalogue('records'), collections: () => loadCatalogue('collections'), progression: loadProgression, compare: loadComparison };
+  }, characters: loadCharacters, career: loadCareer, activities: loadActivities, endgame: () => renderActivityRecords(panel('endgame'), { api, characters, manifest, signal, onExport: data => { exported.sections.activityRecords = data; } }), records: () => loadCatalogue('records'), collections: () => loadCatalogue('collections'),
+  armor: () => renderArmorOrnaments(panel('armor'), { profile, signal, onExport: data => { exported.sections.armorOrnaments = data; } }),
+  progression: loadProgression, compare: loadComparison };
 
   function displayRating(standing) {
     drawPerformanceRating(panel('rating'), { standing, summary, onCompare: () => {
