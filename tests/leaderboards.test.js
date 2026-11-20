@@ -5,6 +5,7 @@ class Element extends EventTarget {
   children = []; style = {}; attributes = {}; textContent = ''; listeners = new Map();
   appendChild(child) { this.children.push(child); }
   replaceChildren() { this.children = []; }
+  closest() { return null; }
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, handler) { this.listeners.set(name, (this.listeners.get(name) || 0) + 1); super.addEventListener(name, handler); }
 }

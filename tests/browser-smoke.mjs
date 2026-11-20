@@ -28,7 +28,12 @@ const basicStats = values => Object.fromEntries(Object.entries(values).map(([key
 const specialtyCatalog = [
   { board_id: 'raid.points', category: 'Raids', title: 'Raid performance', unit: 'points', description: 'Clear credit and contest points.' },
   { board_id: 'contest.123', category: 'Raids', title: 'Test raid · Contest', unit: 'proof', description: 'Verified contest clears.' },
-  { board_id: 'solo.test', category: 'Dungeons', title: 'Test dungeon · Solo', unit: 'solo', description: 'Best verified solo tier.' }
+  { board_id: 'solo.test', category: 'Dungeons', title: 'Test dungeon · Solo', unit: 'solo', description: 'Best verified solo tier.' },
+  { board_id: 'profile.eververse', category: 'Collections', title: 'Bright Dust Net Worth', unit: 'bright_dust', description: 'Estimated Eververse value.' }
+];
+const brightDustRows = [
+  { membership_id: '7', bungie_name: 'Hawk#7753', eververse_bright_dust: 1500 },
+  { membership_id: '8', bungie_name: 'Cosmetic Rival#1234', eververse_bright_dust: 1500 }
 ];
 const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
   membership_id: String(i), bungie_name: i === 27 ? 'FarGuardian#1234' : fixtureRows[i]?.bungie_name ?? `Board Guardian ${i}#1234`, score: 300 - i, standing: i + 1
@@ -36,8 +41,9 @@ const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
 recordDefinitions[31] = { displayProperties: { name: 'SECRET SPOILER', description: 'SECRET SOLUTION' }, stateInfo: { obscuredDescription: 'Keep playing to reveal.' } };
 const collectibleDefinitions = { 1: { displayProperties: { name: 'Test Exotic', description: 'An acquired item' } }, 2: { displayProperties: { name: 'Missing Ship', description: 'Not yet acquired' } } };
-const eververseCatalog = { schemaVersion: 1, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 2, items: [
-  [101, [1, 4], '<script>Test Shader</script>', 'Shaders', 300], [102, [2], 'Missing Ship', 'Ships', 2000], [103, [3], 'Test Shell', 'Ghost shells', null]
+const eververseCatalog = { schemaVersion: 2, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 3, items: [
+  [101, [1, 4], '<script>Test Shader</script>', 'Shaders', 300], [102, [2], 'Missing Ship', 'Ships', 2000], [103, [3], 'Test Shell', 'Ghost shells', null],
+  [104, [5], 'Test Armor Ornament', 'Armor ornaments', 1200, 'Test Armor Set']
 ] };
 const databaseScript = `
 window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
@@ -62,7 +68,8 @@ window.supabase = { createClient: () => ({
       window.__boardCalls.push(args);
       const raw = ${JSON.stringify(specialtyRows)};
       const list = args.p_board.startsWith('contest.') ? [{ ...raw[0], score: 1 }] :
-        args.p_board.startsWith('solo.') ? [{ ...raw[0], score: 2 }] : raw;
+        args.p_board.startsWith('solo.') ? [{ ...raw[0], score: 2 }] :
+        args.p_board === 'profile.eververse' ? ${JSON.stringify(brightDustRows)}.map(row => ({ ...row, score: row.eververse_bright_dust, standing: 1 })) : raw;
       return { abortSignal: async () => ({ data: {
         total: list.length,
         rows: list.slice(args.p_offset, args.p_offset + args.p_limit),
@@ -90,7 +97,9 @@ window.supabase = { createClient: () => ({
       single: async () => ({ data: { indexed_count: 8, tracked_count: 10, fresh_24h_count: 7, due_count: 3, rating_indexed_count: 8, rating_due_count: 2, last_refreshed_at: '2026-11-18T12:00:00Z' }, error }),
       range: async (start, end) => {
         if (table === 'guardian_activity_rankings' && window.__rows[0]?.points === 315) window.__ratingRefreshReads++;
-        return { data: (table === 'guardian_specialty_catalog' ? ${JSON.stringify(specialtyCatalog)} : window.__rows).slice(start, end + 1), error };
+        const rows = table === 'guardian_specialty_catalog' ? ${JSON.stringify(specialtyCatalog)} :
+          table === 'guardian_eververse_rankings' ? ${JSON.stringify(brightDustRows)} : window.__rows;
+        return { data: rows.slice(start, end + 1), error };
       } };
     return query;
   }
@@ -198,7 +207,7 @@ try {
           }])) },
           profile: { data: { currentGuardianRank: 11, lifetimeHighestGuardianRank: 11 } },
           profileRecords: { data: { lifetimeScore: id === 'rival' ? 25000 : 10000 } },
-          profileCollectibles: collectionsPrivate ? { privacy: 2 } : { data: { collectibles: { 1: { state: 0 }, 2: { state: 1 }, 3: { state: 0 } } } },
+          profileCollectibles: collectionsPrivate ? { privacy: 2 } : { data: { collectibles: { 1: { state: 0 }, 2: { state: 1 }, 3: { state: 0 }, 5: { state: 0 } } } },
           characterCollectibles: collectionsPrivate ? { privacy: 2 } : { data: { 0: { collectibles: { 4: { state: 0 } } }, 1: { collectibles: {} }, 2: { collectibles: {} } } },
           characterEquipment: { data: { 0: { items: [{ itemHash: 901, itemInstanceId: '10001' }] } } },
           itemComponents: { instances: { data: { 10001: { primaryStat: { value: 402 }, damageType: 3 } } }, sockets: { data: { 10001: { sockets: [{ plugHash: 902, isEnabled: true }] } } }, stats: { data: { 10001: { stats: { 905: { value: 78 } } } } } },
@@ -331,8 +340,12 @@ try {
     assert.ok(boards.top >= stats.bottom && Math.abs(boards.left - stats.left) <= 1, 'Featured boards sit below game stats');
   }
   await cdp('Page.navigate', { url: origin });
-  await waitFor("document.querySelector('#leaderboard-body tr a') && document.getElementById('nameInput')");
+  await waitFor("document.querySelector('#eververse-board-body tr a') && document.querySelector('#account-rating-body tr a')");
   await assertLayout('Home');
+  assert.equal(await evaluate("document.querySelectorAll('.home-leaderboards .leaderboard-section').length"), 3);
+  assert.equal(await evaluate("document.querySelectorAll('#account-rating-body tr a').length"), 5);
+  assert.equal(await evaluate("document.querySelector('#eververse-board-body tr:nth-child(2) td').textContent"), '1');
+  assert.ok(await evaluate("document.querySelector('#eververse-board-body a').href.endsWith('#overview')"));
   await search('Hawk#7753');
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753' && window.__writes.length === 1");
   await assertSidebar(true);
@@ -374,13 +387,14 @@ try {
   await waitFor("document.querySelector('.clan-summary').textContent.includes('<script>Clan</script>')");
   assert.equal(await evaluate("document.querySelector('.clan-summary script')"), null);
   assert.ok(apiCalls.some(url => url.includes('components=100,104,200,202,204,205,300,304,305,800,900,1100,1400')));
-  await waitFor("document.querySelector('.eververse-value')?.textContent === '300 Bright Dust'");
+  await waitFor("document.querySelector('.eververse-value')?.textContent === '1,500 Bright Dust'");
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
-  assert.match(await evaluate("document.querySelector('.eververse-details').innerText"), /1 of 2 owned Eververse cosmetics/);
+  assert.match(await evaluate("document.querySelector('.eververse-details').innerText"), /2 of 3 owned Eververse cosmetics/);
   await evaluate("document.querySelector('.eververse-items summary').click()");
   await waitFor("document.querySelector('.eververse-items tbody')?.textContent.includes('<script>Test Shader</script>')");
   assert.equal(await evaluate("document.querySelector('.eververse-items tbody script')"), null);
-  assert.equal(await evaluate("document.querySelectorAll('.eververse-items tbody tr').length"), 2);
+  assert.equal(await evaluate("document.querySelectorAll('.eververse-items tbody tr').length"), 3);
+  assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /1,200 Bright Dust.*Estimated share of Test Armor Set.*No verified price.*Excluded from total/s);
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'table-row');
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
   async function openSection(id, condition) {
@@ -477,7 +491,7 @@ try {
   assert.equal(exported.sections.activityRecords.rows.length, 6);
   assert.equal(exported.sections.activityRecords.coverage.charactersLoaded, 3);
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
-  assert.equal(exported.sections.eververseNetWorth.brightDust, 300);
+  assert.equal(exported.sections.eververseNetWorth.brightDust, 1500);
   assert.equal(exported.sections.eververseNetWorth.unpricedCount, 1);
   assert.equal(exported.sections.accountRating.version, PERFORMANCE_VERSION);
   assert.equal(exported.sections.accountRating.performance.percentile, 82);
@@ -531,7 +545,7 @@ try {
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753'");
   await resize(390, 844, true);
   await evaluate("document.querySelector('#suggestions').classList.remove('show')");
-  await openSection('overview', "document.querySelector('.eververse-value')?.textContent === '300 Bright Dust'");
+  await openSection('overview', "document.querySelector('.eververse-value')?.textContent === '1,500 Bright Dust'");
   await assertSidebar(false);
   await evaluate('window.scrollTo(0, 0)');
   assert.ok(await evaluate(`Math.abs(document.querySelector('#nameInput').getBoundingClientRect().top -
@@ -549,9 +563,9 @@ try {
   const mobileSidebar = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'global-sidebar-mobile.png'), Buffer.from(mobileSidebar.data, 'base64'));
   await evaluate("document.querySelector('#game-season-details summary').click()");
-  await waitFor("document.querySelector('.eververse-value')?.textContent === '300 Bright Dust'");
+  await waitFor("document.querySelector('.eververse-value')?.textContent === '1,500 Bright Dust'");
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click(); document.querySelector('.eververse-items summary').click()");
-  await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 2 && document.querySelector('.eververse-items .report-cell-label').getClientRects().length");
+  await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 3 && document.querySelector('.eververse-items .report-cell-label').getClientRects().length");
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'grid');
   await assertLayout('Eververse breakdown');
   await openSection('activities', "document.querySelectorAll('.match-open').length === 25");
@@ -604,12 +618,12 @@ try {
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 8);
   assert.equal(await evaluate("document.querySelectorAll('#time-played-body tr a').length"), 8);
   await evaluate("document.getElementById('leaderboardSearch').value='Hawk#7753'; document.getElementById('leaderboardSearchBtn').click()");
-  assert.equal(await evaluate("document.querySelectorAll('tr.highlight').length"), 6);
+  assert.equal(await evaluate("document.querySelectorAll('tr.highlight').length"), 7);
   await evaluate("document.getElementById('toggleHighestCharacterBtn').click()");
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
   const desktop = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'leaderboards.png'), Buffer.from(desktop.data, 'base64'));
-  await evaluate("window.__indexMissing = true; import('./leaderboard.js').then(module => module.loadLeaderboards())");
+  await evaluate("window.__indexMissing = true; import('./leaderboard.js?v=bright-dust').then(module => module.loadLeaderboards())");
   assert.match(await evaluate("document.getElementById('index-status').textContent"), /not enabled yet/);
   assert.equal(await evaluate("document.querySelectorAll('#highest-character-body tr a').length"), 5);
   await resize(320, 780, true);
@@ -618,6 +632,12 @@ try {
   assert.equal(await evaluate("document.querySelector('#board-choice').value"), 'contest.123');
   await waitFor("document.querySelector('#account-rating-body a')");
   await assertLayout('Leaderboards with a long player name');
+  await cdp('Page.navigate', { url: `${origin}/leaderboards.html?board=profile.eververse#discover` });
+  await waitFor("document.querySelector('#board-rows').textContent.includes('1,500')");
+  assert.equal(await evaluate("document.querySelector('#board-unit').textContent"), 'Bright Dust');
+  assert.equal(await evaluate("document.querySelectorAll('#board-rows tr a').length"), 2);
+  assert.ok(await evaluate("document.querySelector('#board-rows a').href.endsWith('#overview')"));
+  await assertLayout('Bright Dust full board on mobile');
   const narrowBoards = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'leaderboards-mobile.png'), Buffer.from(narrowBoards.data, 'base64'));
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');

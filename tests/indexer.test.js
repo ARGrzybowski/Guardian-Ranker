@@ -75,6 +75,20 @@ function fakeBungie({ pages = [], budget = Infinity, profiles = {}, memberships 
 }
 const run = (store, bungie, extra = {}) => runIndexer({ store, bungie, now: () => NOW, ...extra });
 
+test('cloud profile refresh limits large Collections requests and saves the shared valuation', async () => {
+  const store = new MemoryStore([queued(1, { eververse_version: 2, eververse_checked_at: NOW.toISOString() }), queued(2), queued(3)]);
+  const itemProfile = profile(2);
+  itemProfile.Response.profileCollectibles = { data: { collectibles: { 7: { state: 0 } } } };
+  itemProfile.Response.characterCollectibles = { data: { c: { collectibles: { 7: { state: 16 } } } } };
+  const bungie = fakeBungie({ profiles: { 2: itemProfile } });
+  const eververseCatalog = { schemaVersion: 2, items: [[30, [7], 'Test Ornament', 'Armor ornaments', 1200, 'Test Set']] };
+  await run(store, bungie, { eververseCatalog, maxCollections: 1 });
+  assert.equal(bungie.paths.filter(path => path.includes('components=100,200,800,900')).length, 1);
+  assert.equal(store.guardians.get('2').eververse_bright_dust, 1200);
+  assert.equal(store.guardians.get('2').eververse_version, 2);
+  assert.equal(store.guardians.get('3').eververse_bright_dust, undefined);
+});
+
 test('rating backfills reserve time for clan discovery instead of consuming the whole profile tranche', async () => {
   const store = new MemoryStore(Array.from({length:100},(_,i)=>queued(i+1)));
   const bungie=fakeBungie({pages:[[101]]});

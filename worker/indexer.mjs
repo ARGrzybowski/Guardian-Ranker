@@ -1,4 +1,5 @@
 import { bungieRequest, searchExactName, loadPlayerProfile, formatBungieName } from '../bungieApi.js';
+import { eververseCollection, valueEververseCollection } from '../eververseValue.js';
 
 export class BudgetReached extends Error {}
 const isoAfter = (now, hours) => new Date(now.getTime() + hours * 3600000).toISOString();
@@ -69,22 +70,30 @@ export function createBungieWorker({ apiKey, maxOperations = 300, signal, interv
 }
 
 // Runs once per invocation. Scheduling lives in the cloud, never on a PC.
-export async function runIndexer({ store, bungie, signal, now = () => new Date(), seedNames = [], seedClans = [], maxProfiles = 100, maxDiscoveries = 25, maxClanPages = 20, profileConcurrency = 1, maxActivityScans = 0, maxRatings = 0, rateProfiles, scoresOnly = false }) {
+export async function runIndexer({ store, bungie, signal, now = () => new Date(), seedNames = [], seedClans = [], maxProfiles = 100, maxDiscoveries = 25, maxClanPages = 20, profileConcurrency = 1, maxActivityScans = 0, maxRatings = 0, rateProfiles, scoresOnly = false, eververseCatalog, maxCollections = 16 }) {
   const summary = { profiles_attempted: 0, profiles_refreshed: 0, cached_identity_hits: 0, seed_errors: 0, profile_errors: 0, discovery_errors: 0, roster_errors: 0, clans_found: 0, roster_members_seen: 0, roster_pages: 0, activity_scans: 0, activity_errors: 0, activity_members_seen: 0 };
   const runId = await store.start();
   if (!runId) return { status: 'already_running' };
   let status = 'completed';
   const request = bungie.request.bind(bungie);
+  let collectionsRemaining = maxCollections;
   const refreshOne = async row => {
       summary.profiles_attempted++;
       try {
         let user, loaded;
+        // Collections are much larger than the normal profile response. Reuse
+        // that request when due and cap the number of larger responses per run.
+        const checkCollection = eververseCatalog && collectionsRemaining > 0 &&
+          (row.eververse_version !== eververseCatalog.schemaVersion || !row.eververse_checked_at ||
+            now().getTime() - Date.parse(row.eververse_checked_at) >= 7 * 86400000);
+        if (checkCollection) collectionsRemaining--;
+        const components = checkCollection ? '100,200,800,900' : '100,200,900';
         let identityCheckedAt = row.identity_checked_at;
         const cachedIdentity = row.membership_type != null && row.identity_checked_at &&
           now().getTime() - Date.parse(row.identity_checked_at) < 86400000;
         if (cachedIdentity) {
           try {
-            loaded = await loadPlayerProfile({ destinyMemberships: [{ membershipId: row.membership_id, membershipType: row.membership_type }] }, signal, request, '100,200,900');
+            loaded = await loadPlayerProfile({ destinyMemberships: [{ membershipId: row.membership_id, membershipType: row.membership_type }] }, signal, request, components);
             const override = loaded.profileData.Response.profile?.data?.userInfo?.crossSaveOverride;
             if (override && override !== row.membership_type) loaded = null;
             else summary.cached_identity_hits++;
@@ -99,10 +108,16 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
           user = { destinyMemberships: data.Response?.destinyMemberships || [] };
         }
         if (!loaded) {
-          loaded = await loadPlayerProfile(user, signal, request, '100,200,900');
+          loaded = await loadPlayerProfile(user, signal, request, components);
           identityCheckedAt = now().toISOString();
         }
         const snapshot = profileSnapshot(loaded);
+        if (checkCollection) {
+          const collection = eververseCollection(loaded.profileData.Response);
+          snapshot.eververse_version = eververseCatalog.schemaVersion;
+          snapshot.eververse_bright_dust = collection && !collection.partial
+            ? valueEververseCollection(collection, eververseCatalog).brightDust : null;
+        }
         snapshot.identity_checked_at = identityCheckedAt;
         const age = snapshot.last_played ? now().getTime() - Date.parse(snapshot.last_played) : Infinity;
         const refreshHours = row.is_leader || age < 86400000 ? 0.25 : age < 7 * 86400000 ? 2 : 24;

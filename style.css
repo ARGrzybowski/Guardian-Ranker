@@ -245,6 +245,7 @@ ul#suggestions li:hover {
 }
 .leaderboard-section > button { margin-top: 12px; }
 .leaderboard-section a { color: var(--report-accent); }
+.board-full-link { margin-top: 12px; }
 .featured-heading { display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; align-items: center; }
 .featured-heading h2 { margin: 0; }
 

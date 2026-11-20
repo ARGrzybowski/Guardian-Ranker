@@ -1,7 +1,7 @@
 import { searchExactName, searchNameSuggestions, loadPlayerProfile, parseBungieName, formatBungieName } from './bungieApi.js';
-import { loadLeaderboards } from './leaderboard.js';
+import { loadLeaderboards } from './leaderboard.js?v=bright-dust';
 import { queueGuardian } from './indexQueue.js';
-import { renderPlayerReport } from './playerReport.js';
+import { renderPlayerReport } from './playerReport.js?v=bright-dust';
 import { REPORT_COMPONENTS } from './reportData.js';
 
 const input = document.getElementById('nameInput');

@@ -57,9 +57,11 @@ test('distinguishes private collections, zero verified unlocks, and owned items 
 
 test('published pricing snapshot has valid, unique item and collectible identifiers', () => {
   const catalog = JSON.parse(readFileSync(new URL('../eververseCatalog.json', import.meta.url), 'utf8'));
-  assert.equal(catalog.schemaVersion, 1);
+  assert.equal(catalog.schemaVersion, 2);
   assert.ok(catalog.manifestVersion);
   assert.ok(catalog.pricedCount > 0);
+  assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[5]), 'Verified set prices reach individual ornaments');
+  assert.ok(catalog.items.some(row => row[3] === 'Ghost projections' && row[4] > 0));
   assert.equal(catalog.items.filter(row => row[4] !== null).length, catalog.pricedCount);
   assert.equal(new Set(catalog.items.map(row => row[0])).size, catalog.items.length);
   const hashes = catalog.items.flatMap(row => row[1]);
@@ -68,4 +70,31 @@ test('published pricing snapshot has valid, unique item and collectible identifi
     assert.ok(Number.isSafeInteger(item) && collectibles.length && collectibles.every(Number.isSafeInteger));
     assert.ok(name && category && (dust === null || (Number.isSafeInteger(dust) && dust > 0)));
   }
+});
+
+test('an eligible five-piece ornament set contributes each owned share once and honors a cheaper individual offer', () => {
+  const sale = (itemHash, quantity) => ({ itemHash, quantity: 1, currencies: [{ itemHash: 2817410917, quantity }] });
+  const members = [1, 2, 3, 4, 5].map(itemHash => ({ itemHash, quantity: 1 }));
+  const inventory = Object.fromEntries(members.map(({ itemHash }) => [itemHash, {
+    itemType: 19, itemSubType: 21, itemTypeDisplayName: 'Hunter Universal Ornament', classType: 1
+  }]));
+  inventory[20] = { itemTypeDisplayName: 'Package', displayProperties: { name: 'Hunter Set' } };
+  const collectibles = Object.fromEntries(members.map(({ itemHash }) => [itemHash, {
+    itemHash, sourceString: 'Source: Eververse', displayProperties: { name: `Piece ${itemHash}` }
+  }]));
+  collectibles[9] = { ...collectibles[1] };
+  const vendors = {
+    10: { itemList: [sale(20, 6000), sale(2, 900), sale(3, 1600)] },
+    20: { displayProperties: { name: 'Hunter Set' }, itemList: members }
+  };
+  let catalog = buildEververseCatalog(vendors, collectibles, inventory, {});
+  const value = valueEververseCollection({ owned: new Set([1, 2, 3, 9]), partial: false }, catalog);
+  assert.equal(value.brightDust, 3300);
+  assert.equal(value.items.length, 3);
+  assert.equal(value.items.find(item => item.itemHash === 3).ornamentSet, 'Hunter Set');
+  assert.equal(value.items.find(item => item.itemHash === 2).ornamentSet, undefined);
+  collectibles[4].sourceString = 'Source: Season Pass Reward';
+  catalog = buildEververseCatalog(vendors, collectibles, inventory, {});
+  assert.equal(catalog.items.find(row => row[0] === 1)[4], null, 'Mixed-source sets do not assign a per-piece price');
+  assert.ok(!catalog.items.some(row => row[0] === 4));
 });
