@@ -13,6 +13,8 @@ const EMOTE_VENDORS = new Set(['3361454721', '2184482416', '3118972542']);
 const COSMETIC_TYPES = new Map([[14, 'Emblems'], [21, 'Ships'], [22, 'Vehicles'], [23, 'Emotes'], [24, 'Ghost shells'], [29, 'Finishers']]);
 const COSMETIC_MODS = new Map([['Ghost Projection', 'Ghost projections'], ['Transmat Effect', 'Transmat effects'], ['Emote', 'Emotes'], ['Multiplayer Emote', 'Emotes']]);
 const ARMOR_TYPE = /^(Hunter|Titan|Warlock)( Universal)? Ornament$/;
+const COLLABORATION_TOOLTIP = /distant universe|partnership/i;
+const SHARED_UNLOCK_TOOLTIP = /available for all classes once acquired/i;
 const STANDARD_DUST = {
   // Legendary weapon ornaments use the historical retail rate. Today's
   // rotations retain the Exotic rate.
@@ -26,10 +28,12 @@ const STANDARD_DUST = {
   'Transmat effects': { 5: 450 }
 };
 
+function hasTooltip(item, pattern) {
+  return item.tooltipNotifications?.some(({ displayString }) => pattern.test(displayString));
+}
+
 function needsIndividualPrice(item) {
-  // Bungie marks partner items and shared cross-class unlocks with these tooltips.
-  return item.tooltipNotifications?.some(({ displayString }) =>
-    /distant universe|available for all classes once acquired|partnership/i.test(displayString));
+  return hasTooltip(item, COLLABORATION_TOOLTIP) || hasTooltip(item, SHARED_UNLOCK_TOOLTIP);
 }
 
 function standardDust(category, item) {
@@ -114,21 +118,27 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
 
   const setShares = new Map();
   const requiresOffer = new Set();
+  const collaborationPieces = new Set();
   for (const [hash, preview] of Object.entries(vendors)) {
     const bundle = inventory[hash];
     const name = bundle?.displayProperties?.name?.trim();
     // These offers have an exact same-hash Bungie preview vendor. Count only
     // full five-piece universal armor sets with verified Eververse provenance.
-    if (bundle?.itemTypeDisplayName !== 'Package' || bundle.redacted || !name ||
+    if (bundle?.itemTypeDisplayName !== 'Package' || bundle.redacted || bundle.blacklisted || !name ||
         preview?.redacted || preview?.blacklisted || preview?.displayProperties?.name?.trim() !== name) continue;
     const members = preview.itemList || [];
     if (needsIndividualPrice(bundle)) for (const { itemHash } of members) requiresOffer.add(itemHash);
-    const price = prices.get(Number(hash));
-    if (price === undefined) continue;
-    if (members.length !== 5 || price % members.length || new Set(members.map(item => item.itemHash)).size !== members.length) continue;
+    if (members.length !== 5 || new Set(members.map(item => item.itemHash)).size !== members.length) continue;
     if (!members.every(({ itemHash, quantity }) => quantity === 1 && byItem.get(itemHash)?.eververseOnly &&
         byItem.get(itemHash).category === 'Armor ornaments' && / Universal Ornament$/.test(inventory[itemHash].itemTypeDisplayName) &&
         inventory[itemHash].classType === inventory[members[0].itemHash].classType)) continue;
+    if (hasTooltip(bundle, COLLABORATION_TOOLTIP) && !hasTooltip(bundle, SHARED_UNLOCK_TOOLTIP) &&
+        members.every(({ itemHash }) => inventory[itemHash].inventory?.tierType === 5 &&
+          !hasTooltip(inventory[itemHash], SHARED_UNLOCK_TOOLTIP))) {
+      for (const { itemHash } of members) collaborationPieces.add(itemHash);
+    }
+    const price = prices.get(Number(hash));
+    if (price === undefined || price % members.length) continue;
     const share = price / members.length;
     for (const { itemHash } of members) {
       const previous = setShares.get(itemHash);
@@ -144,6 +154,8 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
       const base = [hash, row.hashes.sort((a, b) => a - b), row.name, row.category];
       if (set && set.price < (direct ?? Infinity)) return [...base, set.price, set.name];
       if (direct !== undefined) return [...base, direct];
+      // Historical Eververse Bright Dust price for Fortnite collaboration pieces.
+      if (collaborationPieces.has(hash)) return [...base, 1600, null, 'collaboration'];
       const item = inventory[hash];
       const standard = !requiresOffer.has(hash) && !needsIndividualPrice(item) ? standardDust(row.category, item) : null;
       return standard === null ? [...base, null] : [...base, standard, null, true];

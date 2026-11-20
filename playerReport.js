@@ -5,7 +5,7 @@ import { closestTriumphs, objectiveCompletion, activityInsights } from './report
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 import { drawPerformanceRating, loadGuardianStandings } from './performanceView.js';
 import { renderPlayerComparison } from './comparisonView.js';
-import { eververseCatalogCoverage, eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=ownership';
+import { eververseCatalogCoverage, eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=6';
 import { refreshGuardianScore } from './indexQueue.js';
 import { reportTable } from './reportTables.js';
 
@@ -209,15 +209,17 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
       <details><summary>How Bright Dust values are calculated</summary>
         ${note('Emote prices come from direct Bright Dust offers. Ownership comes from visible Collections or the public emote wheel.')}
         ${note('For matching five-piece Eververse armor sets, each owned piece can count for one fifth of the listed set price. A cheaper standalone offer takes precedence. Each cosmetic counts once.')}
-        ${note('Regular cosmetics can use the standard price for their type and rarity. Legendary weapon ornament estimates use historical Eververse prices. Collaboration items require a verified Bright Dust offer.')}
+        ${note('Regular cosmetics can use the standard price for their type and rarity. Regular Legendary universal armor pieces use 1,200 Bright Dust. Eligible collaboration set pieces use 1,600 based on historical Fortnite offers. Verified prices take precedence.')}
         ${valuation.standardEstimateCount ? note(`Standard price estimates included: ${number(valuation.standardEstimateCount)}.`) : ''}
+        ${valuation.collaborationEstimateCount ? note(`Collaboration set estimates included: ${number(valuation.collaborationEstimateCount)}.`) : ''}
         ${note('Items marked “No verified price” add nothing to the total. Mask ornaments, gameplay rewards, mixed-source rewards, and Bright Engram focusing are excluded.')}
       </details>`;
     const items = eververseDetails.querySelector('.eververse-items');
     items?.addEventListener('toggle', () => {
       if (items.open && !items.querySelector('table')) items.insertAdjacentHTML('beforeend', reportTable(['Cosmetic', 'Type', 'Bright Dust value', 'Price basis'],
         valuation.items.map(item => [e(item.name), e(item.category), e(amount(item.brightDust)),
-          e(item.ornamentSet ? `Estimated share of ${item.ornamentSet}` : item.standardEstimate ? 'Standard price estimate' :
+          e(item.ornamentSet ? `Estimated share of ${item.ornamentSet}` : item.collaborationEstimate ? 'Collaboration set estimate' :
+            item.standardEstimate ? 'Standard price estimate' :
             item.brightDust == null ? 'Excluded from total' : 'Individual offer')]),
         { caption: 'Individual Eververse values' }));
     });
