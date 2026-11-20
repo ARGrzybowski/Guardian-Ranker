@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildEververseCatalog } from '../scripts/build-eververse-catalog.mjs';
+import { applyReviewApprovals, buildEververseCatalog } from '../scripts/build-eververse-catalog.mjs';
 import { EMOTE_PLUG_SET, eververseCatalogCoverage, eververseCollection, valueEververseCollection } from '../eververseValue.js';
 
 const collectible = (itemHash, sourceString = 'Source: Eververse') => ({ itemHash, sourceString, displayProperties: { name: `Cosmetic ${itemHash}` } });
@@ -92,14 +92,14 @@ test('Eververse catalog totals distinguish owned, visibly missing, and unconfirm
 
 test('published pricing snapshot has valid, unique item and collectible identifiers', () => {
   const catalog = JSON.parse(readFileSync(new URL('../eververseCatalog.json', import.meta.url), 'utf8'));
-  assert.equal(catalog.schemaVersion, 6);
+  assert.equal(catalog.schemaVersion, 7);
   assert.equal(catalog.emotePlugSetHash, EMOTE_PLUG_SET);
   assert.ok(catalog.manifestVersion);
   assert.ok(catalog.pricedCount > 0);
   assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[5]), 'Verified set prices reach individual ornaments');
   assert.ok(catalog.items.some(row => row[3] === 'Armor ornaments' && row[6] && row[4] === 1200));
   assert.ok(catalog.items.some(row => row[3] === 'Weapon ornaments' && row[6] && row[4] === 700));
-  assert.deepEqual(catalog.items.find(row => row[2] === 'N7 Helm').slice(4), [1600, null, 'collaboration']);
+  assert.deepEqual(catalog.items.find(row => row[2] === 'N7 Helm').slice(4), [1600, null, 'collaboration', true]);
   assert.ok(catalog.items.some(row => row[3] === 'Ghost projections' && row[4] > 0));
   assert.ok(catalog.items.some(row => row[3] === 'Emotes' && row[1].length === 0 && row[4] > 0));
   assert.ok(catalog.items.every(row => row[3] !== 'Mask ornaments'));
@@ -111,6 +111,27 @@ test('published pricing snapshot has valid, unique item and collectible identifi
     assert.ok(Number.isSafeInteger(item) && (collectibles.length || category === 'Emotes') && collectibles.every(Number.isSafeInteger));
     assert.ok(name && category && (dust === null || (Number.isSafeInteger(dust) && dust > 0)));
   }
+});
+
+test('review approvals preserve individual offers and value a shared armor unlock once', () => {
+  const catalog = { items: [
+    [101, [1], 'Hunter variant', 'Armor ornaments', null],
+    [102, [2], 'Titan variant', 'Armor ornaments', null],
+    [103, [3], 'Warlock variant', 'Armor ornaments', null],
+    [104, [4], 'Regular', 'Armor ornaments', 1200, null, true]
+  ] };
+  const approvals = { items: [[101, 1600, 'reviewed', 9], [102, 1600, 'reviewed', 9], [103, 1600, 'reviewed', 9], [104, 1200, true]] };
+  const owned = { owned: new Set([1, 2, 3, 4]), partial: false };
+  let value = valueEververseCollection(owned, applyReviewApprovals(catalog, approvals));
+  assert.equal(value.brightDust, 2800);
+  assert.equal(value.ownedCount, 4);
+  assert.equal(value.pricedCount, 4);
+  assert.equal(value.approvedEstimateCount, 4);
+  assert.equal(value.items.filter(item => item.includedWithSharedUnlock).length, 2);
+  catalog.items[2][4] = 1200;
+  value = valueEververseCollection(owned, applyReviewApprovals(catalog, approvals));
+  assert.equal(value.brightDust, 2400);
+  assert.equal(value.approvedEstimateCount, 3);
 });
 
 test('emotes require an exact wheel item and direct Eververse offer, and count once across ownership sources', () => {

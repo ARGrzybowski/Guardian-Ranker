@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { EMOTE_PLUG_SET, EVERVERSE_CATALOG_VERSION } from '../eververseValue.js';
 
@@ -173,6 +173,22 @@ export async function readJson(path) {
   return { data: await response.json(), modified: response.headers.get('last-modified') };
 }
 
+export function applyReviewApprovals(catalog, approvals) {
+  const byItem = new Map(approvals.items.map(([hash, ...approval]) => [hash, approval]));
+  const items = catalog.items.map(row => {
+    const approval = byItem.get(row[0]);
+    if (!approval) return row;
+    const [price, estimate, sharedUnlock] = approval;
+    if (estimate === 'reviewed' ? row[4] !== null : row[4] !== price || row[6] !== estimate) {
+      return sharedUnlock ? [...row.slice(0, 5), row[5] ?? null, row[6] ?? null, false, sharedUnlock] : row;
+    }
+    const approved = [...row.slice(0, 4), price, null, estimate, true];
+    if (sharedUnlock) approved.push(sharedUnlock);
+    return approved;
+  });
+  return { ...catalog, items, pricedCount: items.filter(row => row[4] !== null).length };
+}
+
 async function generate() {
   const { data: { Response: manifest } } = await readJson('/Platform/Destiny2/Manifest/');
   const paths = manifest?.jsonWorldComponentContentPaths?.en;
@@ -181,10 +197,12 @@ async function generate() {
     readJson(paths.DestinyVendorDefinition), readJson(paths.DestinyCollectibleDefinition), readJson(paths.DestinyInventoryItemLiteDefinition), readJson(paths.DestinyPlugSetDefinition)
   ]);
   if (inventory.data[BRIGHT_DUST]?.displayProperties?.name !== 'Bright Dust') throw new Error('Bright Dust currency could not be verified.');
-  const catalog = buildEververseCatalog(vendors.data, collectibles.data, inventory.data, {
+  const base = buildEververseCatalog(vendors.data, collectibles.data, inventory.data, {
     manifestVersion: manifest.version,
     catalogDate: Number.isFinite(Date.parse(vendors.modified)) ? new Date(vendors.modified).toISOString().slice(0, 10) : null
   }, plugSets.data);
+  const approvals = JSON.parse(await readFile(new URL('../eververseReviewApprovals.json', import.meta.url), 'utf8'));
+  const catalog = applyReviewApprovals(base, approvals);
   if (!catalog.pricedCount || !catalog.items.some(row => row[3] === 'Emotes' && row[4] !== null)) {
     throw new Error('The Bungie manifest returned no compatible cosmetic or emote prices.');
   }

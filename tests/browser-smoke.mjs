@@ -41,11 +41,12 @@ const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
 recordDefinitions[31] = { displayProperties: { name: 'SECRET SPOILER', description: 'SECRET SOLUTION' }, stateInfo: { obscuredDescription: 'Keep playing to reveal.' } };
 const collectibleDefinitions = { 1: { displayProperties: { name: 'Test Exotic', description: 'An acquired item' } }, 2: { displayProperties: { name: 'Missing Ship', description: 'Not yet acquired' } } };
-const eververseCatalog = { schemaVersion: 6, emotePlugSetHash: 2860926541, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 5, items: [
+const eververseCatalog = { schemaVersion: 7, emotePlugSetHash: 2860926541, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 6, items: [
   [101, [1, 4], '<script>Test Shader</script>', 'Shaders', 300], [102, [2], 'Missing Ship', 'Ships', 2000], [103, [3], 'Test Shell', 'Ghost shells', null],
   [104, [5], 'Test Armor Ornament', 'Armor ornaments', 1200, 'Test Armor Set'],
   [105, [6], 'Partner Armor Ornament', 'Armor ornaments', 1600, null, 'collaboration'],
-  [106, [], 'Test Emote', 'Emotes', 700]
+  [106, [], 'Test Emote', 'Emotes', 700],
+  [107, [99], 'Approved Shell', 'Ghost shells', 400, null, 'reviewed', true]
 ] };
 const armorOrnamentCatalog = { schemaVersion: 1, manifestVersion: 'test', reviewPrice: 1200, items: [
   [104, [5], 'Test Armor Ornament', 'Titan', 'Legendary', ['Eververse'], ['Test Armor Set'], []],
@@ -689,11 +690,12 @@ try {
   await cdp('Page.navigate', { url: `${origin}/eververse-review.html` });
   await waitFor("document.querySelectorAll('.review-item').length === 2");
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.review-item')].map(row=>row.dataset.item)"), ['103', '105']);
+  assert.equal(await evaluate("document.querySelector('#confirmed-count').textContent"), '1');
   assert.match(await evaluate("document.querySelector('[data-item=\"103\"] .review-item-price').textContent"), /400 Bright Dust.*Proposed value/s);
   await assertLayout('Eververse price review on mobile');
   assert.ok(await evaluate("document.querySelector('[data-item=\"105\"] img').src.endsWith('/partner-armor.jpg')"));
   await evaluate("document.querySelector('[data-item=\"105\"] [data-action=confirmed]').click()");
-  assert.equal(await evaluate("document.querySelector('#confirmed-count').textContent"), '1');
+  assert.equal(await evaluate("document.querySelector('#confirmed-count').textContent"), '2');
   assert.equal(await evaluate("document.querySelectorAll('.review-item').length"), 1);
   await evaluate(`document.querySelector('#review-status').value = 'confirmed';
     document.querySelector('#review-status').dispatchEvent(new Event('change'));
@@ -712,7 +714,8 @@ try {
     HTMLAnchorElement.prototype.click = function () {};
     document.querySelector('#export-reviews').click()`);
   const reviewExport = await evaluate('window.reviewExport');
-  const exportedDecision = JSON.parse(reviewExport).decisions[0];
+  const exportedDecision = JSON.parse(reviewExport).decisions.find(item => item.itemHash === 105);
+  assert.equal(JSON.parse(reviewExport).decisions.find(item => item.itemHash === 107).confirmedPrice, 400);
   assert.equal(exportedDecision.status, 'flagged');
   assert.equal(exportedDecision.note, 'Check the set');
   assert.equal(exportedDecision.suggestedPrice, 1600);
