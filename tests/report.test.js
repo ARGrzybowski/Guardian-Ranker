@@ -17,6 +17,26 @@ test('collections deduplicate scopes and preserve acquired state across characte
   assert.equal(entries.length, 3); assert.equal(entries.filter(e => e.acquired).length, 2);
   assert.equal(overviewStats(profile).collectionTotal, 3);
 });
+test('Collections join all public manifest items and reconcile aliases, missing states, and hidden entries', () => {
+  const profile = {
+    profileCollectibles: { data: { collectibles: { 1: { state: 1 }, 2: { state: 64 }, 3: { state: 4 }, 4: { state: 1 } } } }
+  };
+  const definition = (itemHash, name) => ({ itemHash, displayProperties: { name } });
+  const definitions = {
+    1: definition(9, 'Same Ship'), 2: definition(9, 'Same Ship'), 3: definition(10, 'Hidden example'),
+    4: definition(11, 'Missing Ship'), 5: definition(12, 'Omitted Ship')
+  };
+  const entries = catalogueEntries(profile, 'collections', definitions);
+  assert.equal(entries.length, 4);
+  assert.deepEqual(entries.map(e => e.ownership), ['owned', 'unconfirmed', 'missing', 'unconfirmed']);
+  assert.equal(entries[1].hidden, true);
+  assert.equal(entries[1].definition, undefined);
+  assert.deepEqual(filterCatalogue(entries, '', 'unconfirmed', 'collections').map(e => e.name), ['Omitted Ship']);
+  assert.deepEqual(filterCatalogue(entries, '', 'incomplete', 'collections').map(e => e.name), ['Missing Ship']);
+  assert.equal(overviewStats(profile).collectionAcquired, 1, 'A hidden state cannot establish visible ownership');
+  profile.characters = { data: { a: {} } };
+  assert.equal(catalogueEntries(profile, 'collections', definitions)[2].ownership, 'unconfirmed');
+});
 test('triumph flags distinguish completion, redemption, titles, and hidden entries', () => {
   const profile = { profileRecords: { data: { records: { 1: { state: 0 }, 2: { state: 1 }, 3: { state: 4 }, 4: { state: 16 }, 5: { state: 65 } } } } };
   const entries = recordEntries(profile);
