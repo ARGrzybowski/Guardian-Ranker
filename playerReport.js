@@ -5,7 +5,7 @@ import { closestTriumphs, objectiveCompletion, activityInsights } from './report
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 import { drawPerformanceRating, loadGuardianStandings } from './performanceView.js';
 import { renderPlayerComparison } from './comparisonView.js';
-import { eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=5';
+import { eververseCatalogCoverage, eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=ownership';
 import { refreshGuardianScore } from './indexQueue.js';
 import { reportTable } from './reportTables.js';
 
@@ -58,7 +58,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   const overview = panel('overview');
   overview.innerHTML = `<div class="section-heading"><div><p class="eyebrow">AT A GLANCE</p><h3>Guardian overview</h3></div></div>
     <dl class="report-stats">${tile('Guardian Rank', number(summary.rank))}${tile('Highest rank', number(summary.highestRank))}${tile('Highest equipped power', number(summary.power))}${tile('Character time', `${number(summary.hours)} hours`)}${tile('Lifetime Triumph score', number(summary.triumphScore))}${tile('Active Triumph score', number(summary.activeScore))}${tile('Renewed rank', number(summary.renewedRank))}${tile('Collections acquired', summary.hasCollections ? `${number(summary.collectionAcquired)} / ${number(summary.collectionTotal)}` : 'Unavailable')}${tile('Commendation score', number(summary.commendationScore))}<div class="report-stat"><dt>Eververse net worth</dt><dd class="eververse-value" aria-live="polite">Calculating…</dd></div></dl>
-    <details class="report-details"><summary>Eververse pricing breakdown</summary><div class="eververse-details">${note('Loading Eververse prices…')}</div></details>
+    <details class="report-details"><summary>Eververse ownership and pricing</summary><div class="eververse-details">${note('Loading Eververse prices…')}</div></details>
     <h3>Characters</h3><div class="character-section report-character-grid">${characters.map(c => `<article class="character-preview">${image(c.emblemBackgroundPath, `${CLASSES[c.classType] || 'Guardian'} emblem`)}<div><h4>${e(CLASSES[c.classType] || 'Guardian')}</h4><strong class="power-value">${e(number(c.light))} Power</strong><p>${e(number(numeric(c.minutesPlayedTotal) == null ? null : Number(c.minutesPlayedTotal) / 60))} hours · ${e(dateText(c.dateLastPlayed))}</p></div></article>`).join('')}</div>
     <div class="clan-summary"><h3>Clan</h3>${note('Loading clan membership…')}</div>
     <details class="report-details"><summary>Account identity & linked platforms</summary><p>Destiny membership ID: <code>${e(membership.membershipId)}</code></p><ul>${(user.destinyMemberships || []).map(m => `<li>${e(PLATFORMS[m.membershipType] || 'Other')} · ${e(m.displayName || bungieName)} ${m.crossSaveOverride && m.crossSaveOverride !== m.membershipType ? '(cross-save overridden)' : ''}</li>`).join('')}</ul><a href="https://www.bungie.net/7/en/User/Profile/${encodeURIComponent(membership.membershipType)}/${encodeURIComponent(membership.membershipId)}" target="_blank" rel="noopener noreferrer">View Bungie profile ↗</a></details>`;
@@ -191,22 +191,28 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     }
     signal.throwIfAborted();
     const valuation = valueEververseCollection(collection, catalog);
-    exported.sections.eververseNetWorth = valuation;
+    const catalogCoverage = eververseCatalogCoverage(profile, catalog, valuation);
+    exported.sections.eververseNetWorth = { ...valuation, catalogCoverage };
     eververseValue.textContent = valuation.brightDust == null ? 'No verified estimate' : `${number(valuation.brightDust)} Bright Dust`;
     const amount = price => price == null ? 'No verified price' : `${number(price)} Bright Dust`;
     eververseDetails.innerHTML = `${note(`${number(valuation.pricedCount)} of ${number(valuation.ownedCount)} owned Eververse cosmetics have a Bright Dust value${valuation.catalogDate ? ` · Bungie catalog dated ${valuation.catalogDate}` : ''}.`)}
+      ${note('Catalog total covers the Eververse cosmetics tracked here. Confirmed missing comes from visible Bungie collection states. Unconfirmed items lack a public ownership result. For the wider Bungie collection, open Collections.')}
       ${valuation.collectionCoverage === 'partial' ? note('Some profile or character Collections are unavailable. The estimate covers visible unlocks.') : ''}
-      ${valuation.emoteCoverage === 'public'
-        ? note('Emote prices come from direct Bright Dust offers. Ownership comes from visible Collections or the public emote wheel.')
-        : note('Bungie did not return public emote data. This estimate may omit emotes.')}
-      ${note('The estimate uses verified Bright Dust offers. For matching five-piece Eververse armor sets, each owned piece can count for one fifth of the listed set price. A cheaper standalone offer takes precedence. Each cosmetic counts once.')}
-      ${note('Regular cosmetics without a listed offer can use the standard price for their type and rarity. Legendary weapon ornament estimates use historical Eververse prices. Collaboration items require a verified Bright Dust offer.')}
-      ${valuation.standardEstimateCount ? note(`Standard price estimates included: ${number(valuation.standardEstimateCount)}.`) : ''}
-      ${note('Items marked “No verified price” add nothing to the total. Mask ornaments, gameplay rewards, mixed-source rewards, and Bright Engram focusing are excluded.')}
-      ${valuation.categories.length ? reportTable(['Cosmetic type', 'Priced / owned', 'Estimated prices', 'Bright Dust value'], valuation.categories.map(row => [
-        e(row.category), e(`${number(row.priced)} / ${number(row.owned)}`), e(number(row.estimated)), e(amount(row.priced ? row.brightDust : null))
-      ]), { caption: 'Eververse pricing by cosmetic type' }) : ''}
-      ${valuation.items.length ? '<details class="eververse-items"><summary>View individual cosmetics and prices</summary></details>' : ''}`;
+      ${valuation.emoteCoverage === 'unavailable' ? note('Bungie did not return public emote data. This estimate may omit emotes.') : ''}
+      ${reportTable(['Cosmetic type', 'Owned', 'Catalog total', 'Confirmed missing', 'Unconfirmed', 'Owned with prices', 'Bright Dust value'],
+        catalogCoverage.map(row => [
+          e(row.category), e(number(row.owned)), e(number(row.catalogTotal)), e(number(row.confirmedMissing)), e(number(row.unconfirmed)),
+          `${e(number(row.priced))}${row.estimated ? `<br><small>${e(number(row.estimated))} estimated</small>` : ''}`,
+          e(row.owned ? amount(row.priced ? row.brightDust : null) : '—')
+        ]), { caption: 'Eververse ownership and prices by cosmetic type' })}
+      ${valuation.items.length ? '<details class="eververse-items"><summary>View owned cosmetics and prices</summary></details>' : ''}
+      <details><summary>How Bright Dust values are calculated</summary>
+        ${note('Emote prices come from direct Bright Dust offers. Ownership comes from visible Collections or the public emote wheel.')}
+        ${note('For matching five-piece Eververse armor sets, each owned piece can count for one fifth of the listed set price. A cheaper standalone offer takes precedence. Each cosmetic counts once.')}
+        ${note('Regular cosmetics can use the standard price for their type and rarity. Legendary weapon ornament estimates use historical Eververse prices. Collaboration items require a verified Bright Dust offer.')}
+        ${valuation.standardEstimateCount ? note(`Standard price estimates included: ${number(valuation.standardEstimateCount)}.`) : ''}
+        ${note('Items marked “No verified price” add nothing to the total. Mask ornaments, gameplay rewards, mixed-source rewards, and Bright Engram focusing are excluded.')}
+      </details>`;
     const items = eververseDetails.querySelector('.eververse-items');
     items?.addEventListener('toggle', () => {
       if (items.open && !items.querySelector('table')) items.insertAdjacentHTML('beforeend', reportTable(['Cosmetic', 'Type', 'Bright Dust value', 'Price basis'],
