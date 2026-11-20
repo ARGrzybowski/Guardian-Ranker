@@ -1,12 +1,12 @@
 import { escapeHtml as e } from './html.js';
 import { bungieImage, createManifestClient, mapConcurrent } from './manifest.js';
-import { CLASSES, PLATFORMS, ACTIVITY_MODES, overviewStats, characterSummary, dateText, numeric, statValue, careerGroups, summarizeCareer, catalogueEntries, filterCatalogue, mergeActivities, createReportApi } from './reportData.js';
+import { CLASSES, PLATFORMS, ACTIVITY_MODES, overviewStats, characterSummary, dateText, numeric, statValue, careerGroups, summarizeCareer, catalogueEntries, filterCatalogue, mergeActivities, createReportApi } from './reportData.js?v=collections';
 import { closestTriumphs, objectiveCompletion, activityInsights } from './reportInsights.js';
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 import { drawPerformanceRating, loadGuardianStandings } from './performanceView.js';
 import { renderPlayerComparison } from './comparisonView.js';
-import { eververseCatalogCoverage, eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=7';
-import { renderArmorOrnaments } from './armorOrnamentsView.js?v=2';
+import { eververseCatalogCoverage, eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=8';
+import { renderArmorOrnaments } from './armorOrnamentsView.js?v=3';
 import { refreshGuardianScore } from './indexQueue.js';
 import { reportTable } from './reportTables.js';
 
@@ -58,7 +58,7 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
   const panel = id => container.querySelector(`#report-${id}`);
   const overview = panel('overview');
   overview.innerHTML = `<div class="section-heading"><div><p class="eyebrow">AT A GLANCE</p><h3>Guardian overview</h3></div></div>
-    <dl class="report-stats">${tile('Guardian Rank', number(summary.rank))}${tile('Highest rank', number(summary.highestRank))}${tile('Highest equipped power', number(summary.power))}${tile('Character time', `${number(summary.hours)} hours`)}${tile('Lifetime Triumph score', number(summary.triumphScore))}${tile('Active Triumph score', number(summary.activeScore))}${tile('Renewed rank', number(summary.renewedRank))}${tile('Collections acquired', summary.hasCollections ? `${number(summary.collectionAcquired)} / ${number(summary.collectionTotal)}` : 'Unavailable')}${tile('Commendation score', number(summary.commendationScore))}<div class="report-stat"><dt>Eververse net worth</dt><dd class="eververse-value" aria-live="polite">Calculating…</dd></div></dl>
+    <dl class="report-stats">${tile('Guardian Rank', number(summary.rank))}${tile('Highest rank', number(summary.highestRank))}${tile('Highest equipped power', number(summary.power))}${tile('Character time', `${number(summary.hours)} hours`)}${tile('Lifetime Triumph score', number(summary.triumphScore))}${tile('Active Triumph score', number(summary.activeScore))}${tile('Renewed rank', number(summary.renewedRank))}${tile('Visible Collections records acquired', summary.hasCollections ? `${number(summary.collectionAcquired)} / ${number(summary.collectionTotal)}` : 'Unavailable')}${tile('Commendation score', number(summary.commendationScore))}<div class="report-stat"><dt>Eververse net worth</dt><dd class="eververse-value" aria-live="polite">Calculating…</dd></div></dl>
     <details class="report-details"><summary>Eververse ownership and pricing</summary><div class="eververse-details">${note('Loading Eververse prices…')}</div></details>
     <h3>Characters</h3><div class="character-section report-character-grid">${characters.map(c => `<article class="character-preview">${image(c.emblemBackgroundPath, `${CLASSES[c.classType] || 'Guardian'} emblem`)}<div><h4>${e(CLASSES[c.classType] || 'Guardian')}</h4><strong class="power-value">${e(number(c.light))} Power</strong><p>${e(number(numeric(c.minutesPlayedTotal) == null ? null : Number(c.minutesPlayedTotal) / 60))} hours · ${e(dateText(c.dateLastPlayed))}</p></div></article>`).join('')}</div>
     <div class="clan-summary"><h3>Clan</h3>${note('Loading clan membership…')}</div>
@@ -384,7 +384,13 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
     const definitions = await manifest.table(records ? 'DestinyRecordDefinition' : 'DestinyCollectibleDefinition', signal);
     const entries = catalogueEntries(profile, type, definitions); signal.throwIfAborted();
     exported.sections[type] = entries;
-    target.innerHTML = `<h3>${records ? 'Triumphs & unlocked titles' : 'Collections'}</h3>${note(records ? 'Completion and redemption are separate. Secret triumph descriptions remain hidden. Titles are listed when Bungie marks them equippable.' : 'Includes visible profile and character collectibles, deduplicated across characters. The denominator is the exposed catalogue, not every item ever released.')}<div class="report-filters"><label>Search ${records ? 'triumphs' : 'collections'}<input class="catalogue-search" type="search" placeholder="Name or details"></label><label>Show<select class="catalogue-filter"><option value="all">All</option><option value="complete">${records ? 'Completed' : 'Acquired'}</option><option value="incomplete">${records ? 'Incomplete' : 'Missing'}</option>${records ? '<option value="titles">Unlocked titles</option>' : ''}</select></label></div><p class="catalogue-count report-note" aria-live="polite"></p><div class="catalogue-grid"></div><button type="button" class="catalogue-more">Show more</button>`;
+    const counts = { owned: 0, missing: 0, unconfirmed: 0, hidden: 0 };
+    if (!records) for (const entry of entries) {
+      counts[entry.ownership]++;
+      if (entry.hidden) counts.hidden++;
+    }
+    const collectionSummary = `${number(entries.length)} items · ${number(counts.owned)} acquired · ${number(counts.missing)} confirmed missing · ${number(counts.unconfirmed)} unconfirmed${counts.hidden ? ` (${number(counts.hidden)} hidden by Bungie)` : ''}`;
+    target.innerHTML = `<h3>${records ? 'Triumphs & unlocked titles' : 'Collections'}</h3>${note(records ? 'Completion and redemption are separate. Secret triumph descriptions remain hidden. Titles are listed when Bungie marks them equippable.' : collectionSummary)}<div class="report-filters"><label>Search ${records ? 'triumphs' : 'collections'}<input class="catalogue-search" type="search" placeholder="Name or details"></label><label>Show<select class="catalogue-filter"><option value="all">All</option><option value="complete">${records ? 'Completed' : 'Acquired'}</option><option value="incomplete">${records ? 'Incomplete' : 'Confirmed missing'}</option>${records ? '<option value="titles">Unlocked titles</option>' : '<option value="unconfirmed">Unconfirmed</option>'}</select></label></div><p class="catalogue-count report-note" aria-live="polite"></p><div class="catalogue-grid"></div><button type="button" class="catalogue-more">Show more</button>`;
     let limit = 24;
     function draw() {
       let filtered = filterCatalogue(entries, target.querySelector('input').value, target.querySelector('.catalogue-filter').value, type);
@@ -395,8 +401,8 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
         const progress = entry.objectives?.length ? entry.objectives : entry.intervalObjectives || [];
         const title = entry.definition?.titleInfo?.titlesByGender?.Male || entry.definition?.titleInfo?.titlesByGender?.Female;
         const completion = !entry.obscured ? objectiveCompletion(entry) : null;
-        const extra = `${records && completion != null && !entry.complete ? `<p class="report-note">Objective progress: ${e(number(completion, 1))}% (average across objectives)</p>` : ''}${!records && entry.definition?.sourceString ? `<p class="report-note">Source: ${e(entry.definition.sourceString)}</p>` : ''}${records && entry.completedCount != null ? `<p class="report-note">Times completed: ${e(number(entry.completedCount))}</p>` : ''}`;
-        return `<article class="catalogue-item">${entry.obscured ? '' : image(entry.definition?.displayProperties?.icon, '', 'item-icon')}<div><h4>${e(entry.name)}</h4><span class="report-badge ${complete ? 'complete' : ''}">${records ? entry.redeemed ? 'Redeemed' : complete ? 'Complete · unclaimed' : 'In progress' : complete ? 'Acquired' : 'Missing'}</span>${entry.titleUnlocked && title ? `<p class="title-name">Title: ${e(title)}</p>` : ''}<p>${e(entry.description)}</p>${extra}${records && !entry.obscured ? progress.map(o => `<p class="report-note">${e(number(o.progress))} / ${e(number(o.completionValue))}${o.complete ? ' · Complete' : ''}</p>`).join('') : ''}</div></article>`;
+        const extra = `${records && completion != null && !entry.complete ? `<p class="report-note">Objective progress: ${e(number(completion, 1))}% (average across objectives)</p>` : ''}${!records && entry.definition?.sourceString ? `<p class="report-note">${e(entry.definition.sourceString)}</p>` : ''}${records && entry.completedCount != null ? `<p class="report-note">Times completed: ${e(number(entry.completedCount))}</p>` : ''}`;
+        return `<article class="catalogue-item">${entry.obscured ? '' : image(entry.definition?.displayProperties?.icon, '', 'item-icon')}<div><h4>${e(entry.name)}</h4><span class="report-badge ${complete ? 'complete' : ''}">${records ? entry.redeemed ? 'Redeemed' : complete ? 'Complete · unclaimed' : 'In progress' : complete ? 'Acquired' : entry.ownership === 'missing' ? 'Confirmed missing' : 'Unconfirmed'}</span>${entry.titleUnlocked && title ? `<p class="title-name">Title: ${e(title)}</p>` : ''}<p>${e(entry.description)}</p>${extra}${records && !entry.obscured ? progress.map(o => `<p class="report-note">${e(number(o.progress))} / ${e(number(o.completionValue))}${o.complete ? ' · Complete' : ''}</p>`).join('') : ''}</div></article>`;
       }).join('') || note('No matching public entries. This component may be private or unavailable.');
       target.querySelector('.catalogue-more').hidden = limit >= filtered.length;
     }

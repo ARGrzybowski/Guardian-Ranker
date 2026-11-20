@@ -1,7 +1,7 @@
 const NOT_ACQUIRED = 1;
 const HIDDEN = 2 | 4;
 export const EMOTE_PLUG_SET = 2860926541;
-export const EVERVERSE_CATALOG_VERSION = 7;
+export const EVERVERSE_CATALOG_VERSION = 8;
 
 function collectibleTable(scope) {
   const table = scope?.collectibles;

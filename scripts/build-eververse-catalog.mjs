@@ -6,12 +6,14 @@ const BUNGIE = 'https://www.bungie.net';
 const BRIGHT_DUST = 2817410917;
 const LEGENDARY_MARK = 402110270;
 const EVERVERSE_SOURCE = 'Source: Eververse';
+const BRIGHT_ENGRAM_SOURCE = 'Source: Bright Engrams';
 // Tess and the manifest's Eververse Ghost Projection rotation.
 const PROJECTION_VENDORS = new Set(['3361454721', '1446296883']);
 // Tess and the two Eververse emote rotations for the profile emote wheel.
 const EMOTE_VENDORS = new Set(['3361454721', '2184482416', '3118972542']);
 const COSMETIC_TYPES = new Map([[14, 'Emblems'], [21, 'Ships'], [22, 'Vehicles'], [23, 'Emotes'], [24, 'Ghost shells'], [29, 'Finishers']]);
 const COSMETIC_MODS = new Map([['Ghost Projection', 'Ghost projections'], ['Transmat Effect', 'Transmat effects'], ['Emote', 'Emotes'], ['Multiplayer Emote', 'Emotes']]);
+const LEGACY_ENGRAM_COSMETICS = new Set(['Ghost shells', 'Ships', 'Vehicles', 'Shaders', 'Transmat effects']);
 const ARMOR_TYPE = /^(Hunter|Titan|Warlock)( Universal)? Ornament$/;
 const COLLABORATION_TOOLTIP = /distant universe|partnership/i;
 const SHARED_UNLOCK_TOOLTIP = /available for all classes once acquired/i;
@@ -19,13 +21,13 @@ const STANDARD_DUST = {
   // Legendary weapon ornaments use the historical retail rate. Today's
   // rotations retain the Exotic rate.
   'Weapon ornaments': { 5: 700, 6: 1250 },
-  'Ghost shells': { 6: 2850 },
-  Ships: { 6: 2000 },
-  Vehicles: { 6: 2500 },
+  'Ghost shells': { 5: 400, 6: 2850 },
+  Ships: { 5: 500, 6: 2000 },
+  Vehicles: { 5: 600, 6: 2500 },
   Shaders: { 5: 300 },
   Finishers: { 5: 3250 },
   'Ghost projections': { 4: 1500, 5: 1500 },
-  'Transmat effects': { 5: 450 }
+  'Transmat effects': { 4: 450, 5: 450 }
 };
 
 function hasTooltip(item, pattern) {
@@ -52,6 +54,8 @@ function standardDust(category, item) {
 
 function cosmeticCategory(item) {
   if (item?.itemTypeDisplayName === 'Mask Ornament') return null;
+  if (item?.itemType === 9 && item.itemCategoryHashes?.includes(52) &&
+      /purchased for Silver.*Holochip Extractor/i.test(item.displayProperties?.description)) return 'Holochips';
   if (item?.itemType !== 19) return COSMETIC_TYPES.get(item?.itemType);
   if (item.itemSubType === 20) return 'Shaders';
   if (item.itemSubType === 21) {
@@ -93,12 +97,13 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
     const name = collectible.displayProperties?.name?.trim();
     const source = collectible.sourceString?.trim();
     const storeEmote = emotePrices.has(collectible.itemHash);
-    const eligibleEmoteSource = !source || source === EVERVERSE_SOURCE || source === 'Source: Bright Engrams';
+    const eligibleEmoteSource = !source || source === EVERVERSE_SOURCE || source === BRIGHT_ENGRAM_SOURCE;
     if (storeEmote && (collectible.redacted || !eligibleEmoteSource)) excludedEmotes.add(collectible.itemHash);
     if (!category || !name || gameplayRewards.has(collectible.itemHash) || collectible.redacted ||
         item.redacted || item.blacklisted || /^Classified\b/i.test(name)) continue;
     const row = byItem.get(collectible.itemHash) ?? { hashes: [], category, name, eververseOnly: true };
     row.eververseOnly &&= source === EVERVERSE_SOURCE ||
+      (source === BRIGHT_ENGRAM_SOURCE && LEGACY_ENGRAM_COSMETICS.has(category)) ||
       (!source && category === 'Ghost projections' && storeProjections.has(collectible.itemHash)) ||
       (storeEmote && eligibleEmoteSource);
     row.hashes.push(Number(hash));
@@ -179,7 +184,8 @@ export function applyReviewApprovals(catalog, approvals) {
     const approval = byItem.get(row[0]);
     if (!approval) return row;
     const [price, estimate, sharedUnlock] = approval;
-    if (estimate === 'reviewed' ? row[4] !== null : row[4] !== price || row[6] !== estimate) {
+    const matchingEstimate = row[4] === price && (row[6] === estimate || (estimate === 'reviewed' && row[6]));
+    if (!matchingEstimate && !(estimate === 'reviewed' && row[4] === null)) {
       return sharedUnlock ? [...row.slice(0, 5), row[5] ?? null, row[6] ?? null, false, sharedUnlock] : row;
     }
     const approved = [...row.slice(0, 4), price, null, estimate, true];

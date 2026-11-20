@@ -1,4 +1,5 @@
 import { bungieRequest } from './bungieApi.js';
+import { confirmedMissingCollectibles } from './eververseValue.js';
 
 export const REPORT_COMPONENTS = '100,104,200,202,204,205,300,304,305,800,900,1100,1400';
 export const CLASSES = ['Titan', 'Hunter', 'Warlock'];
@@ -36,7 +37,7 @@ export function characterSummary(profile) {
 export function overviewStats(profile) {
   const characters = characterSummary(profile);
   const records = profile.profileRecords?.data;
-  const collections = collectionEntries(profile);
+  const collections = collectionEntries(profile).filter(entry => entry.visible);
   const minutes = characters.map(c => numeric(c.minutesPlayedTotal));
   return {
     hours: minutes.some(v => v != null) ? Math.floor(minutes.reduce((a, v) => a + (v || 0), 0) / 60) : null,
@@ -61,10 +62,45 @@ export function collectionEntries(profile) {
   const merged = new Map();
   const scopes = [profile.profileCollectibles?.data, ...Object.values(profile.characterCollectibles?.data || {})];
   for (const scope of scopes) for (const [hash, item] of Object.entries(scope?.collectibles || {})) {
-    const acquired = (item.state & 1) === 0;
-    merged.set(hash, { hash, ...item, acquired: acquired || merged.get(hash)?.acquired || false });
+    const state = item?.state;
+    if (!Number.isInteger(state) || state < 0 || state > 0x7fffffff) continue;
+    const visible = (state & 6) === 0;
+    const acquired = visible && (state & 1) === 0;
+    const previous = merged.get(hash);
+    if (previous?.acquired || (previous?.visible && !visible)) continue;
+    merged.set(hash, { ...item, hash, visible, acquired });
   }
   return [...merged.values()];
+}
+
+function collectionCatalogue(profile, definitions) {
+  const observed = new Map(collectionEntries(profile).map(entry => [entry.hash, entry]));
+  const confirmedMissing = confirmedMissingCollectibles(profile);
+  const groups = new Map();
+  for (const [hash, definition] of Object.entries(definitions)) {
+    const name = definition.displayProperties?.name?.trim();
+    if (definition.redacted || !name || /^Classified\b/i.test(name)) continue;
+    const key = definition.itemHash || hash;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(hash);
+  }
+  for (const [hash, item] of observed) {
+    if (item.visible && !definitions[hash]) groups.set(hash, [hash]);
+  }
+  return [...groups.values()].map(hashes => {
+    const owned = hashes.find(hash => observed.get(hash)?.acquired);
+    const visible = hashes.find(hash => observed.get(hash)?.visible);
+    const hidden = !visible && hashes.some(hash => observed.has(hash));
+    const hash = owned || visible || hashes[0];
+    const definition = hidden ? undefined : definitions[hash];
+    const ownership = owned ? 'owned' : hashes.every(id => confirmedMissing.has(Number(id))) ? 'missing' : 'unconfirmed';
+    return {
+      ...observed.get(hash), hash, collectibleHashes: hashes, itemHash: definition?.itemHash,
+      acquired: Boolean(owned), ownership, hidden, definition,
+      name: hidden ? 'Hidden collectible' : definition?.displayProperties?.name || `Unknown collectible (${hash})`,
+      description: definition?.displayProperties?.description || ''
+    };
+  });
 }
 export function recordEntries(profile) {
   const merged = new Map();
@@ -78,7 +114,8 @@ export function recordEntries(profile) {
   return [...merged.values()];
 }
 export function catalogueEntries(profile, type, definitions) {
-  const entries = type === 'records' ? recordEntries(profile) : collectionEntries(profile);
+  if (type === 'collections') return collectionCatalogue(profile, definitions);
+  const entries = recordEntries(profile);
   return entries.map(entry => {
     const definition = definitions[entry.hash];
     const obscured = type === 'records' && Boolean(entry.state & 8);
@@ -89,9 +126,11 @@ export function catalogueEntries(profile, type, definitions) {
 }
 export function filterCatalogue(entries, query = '', filter = 'all', type = 'records') {
   const search = query.trim().toLocaleLowerCase();
-  return entries.filter(e => (!search || `${e.name} ${e.description} ${type === 'collections' ? e.definition?.sourceString || '' : ''}`.toLocaleLowerCase().includes(search)) &&
+  return entries.filter(e => !(type === 'collections' && e.hidden) &&
+    (!search || `${e.name} ${e.description} ${type === 'collections' ? e.definition?.sourceString || '' : ''}`.toLocaleLowerCase().includes(search)) &&
     (filter === 'all' || (filter === 'complete' && (type === 'records' ? e.complete : e.acquired)) ||
-      (filter === 'incomplete' && !(type === 'records' ? e.complete : e.acquired)) || (filter === 'titles' && e.titleUnlocked)))
+      (filter === 'incomplete' && (type === 'records' ? !e.complete : e.ownership === 'missing')) ||
+      (filter === 'unconfirmed' && e.ownership === 'unconfirmed') || (filter === 'titles' && e.titleUnlocked)))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

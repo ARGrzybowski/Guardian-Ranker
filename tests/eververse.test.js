@@ -92,7 +92,7 @@ test('Eververse catalog totals distinguish owned, visibly missing, and unconfirm
 
 test('published pricing snapshot has valid, unique item and collectible identifiers', () => {
   const catalog = JSON.parse(readFileSync(new URL('../eververseCatalog.json', import.meta.url), 'utf8'));
-  assert.equal(catalog.schemaVersion, 7);
+  assert.equal(catalog.schemaVersion, 8);
   assert.equal(catalog.emotePlugSetHash, EMOTE_PLUG_SET);
   assert.ok(catalog.manifestVersion);
   assert.ok(catalog.pricedCount > 0);
@@ -111,6 +111,23 @@ test('published pricing snapshot has valid, unique item and collectible identifi
     assert.ok(Number.isSafeInteger(item) && (collectibles.length || category === 'Emotes') && collectibles.every(Number.isSafeInteger));
     assert.ok(name && category && (dust === null || (Number.isSafeInteger(dust) && dust > 0)));
   }
+});
+
+test('legacy Bright Engram cosmetics and paid Holochip unlocks enter the catalog with their source intact', () => {
+  const ship = { itemType: 21, itemTypeDisplayName: 'Ship', inventory: { tierType: 5 } };
+  const chip = { itemType: 9, itemCategoryHashes: [35, 52], displayProperties: {
+    description: 'Once purchased for Silver, you may claim this item again from Collections. Claim a Holochip Extractor to end the effect.'
+  } };
+  const inventory = { 1: ship, 2: ship, 3: ship, 4: chip,
+    5: { ...chip, displayProperties: { description: 'Removes active Holochip effect.' } } };
+  const catalog = buildEververseCatalog({ tess: { itemList: [offer(2, 600)] } }, {
+    11: collectible(1, 'Source: Bright Engrams'), 12: collectible(2, 'Source: Bright Engrams'),
+    13: collectible(3, 'Source: Bright Engrams'), 18: collectible(3, 'Source: Complete a raid.'),
+    14: collectible(4), 15: collectible(5)
+  }, inventory, {});
+  assert.deepEqual(catalog.items.map(row => [row[0], row[3], row[4], row[6] ?? null]), [
+    [1, 'Ships', 500, true], [2, 'Ships', 600, null], [4, 'Holochips', null, null]
+  ]);
 });
 
 test('review approvals preserve individual offers and value a shared armor unlock once', () => {
@@ -270,7 +287,7 @@ test('cosmetic estimates use the type and rarity and exclude masks and Legendary
   }, Object.fromEntries(Object.keys(inventory).map(id => [id, collectible(Number(id))])), inventory, {});
   assert.deepEqual(catalog.items.map(row => [row[0], row[4], Boolean(row[6])]), [
     [1, 700, true], [2, 1250, true], [3, 1700, false], [4, 2850, true], [5, 300, true],
-    [6, 3250, true], [9, null, false], [10, null, false]
+    [6, 3250, true], [9, null, false], [10, 500, true]
   ]);
   const value = valueEververseCollection({ owned: new Set([1, 2, 3, 7, 8]), partial: false, emotes: new Set() }, catalog);
   assert.equal(value.brightDust, 3650);

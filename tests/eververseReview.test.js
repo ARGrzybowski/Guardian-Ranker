@@ -19,7 +19,7 @@ test('every catalog row has an icon and each individual or bundle price has matc
       bundle.name === item.set && hasDustPrice(bundle.offers, item.price * 5)), item.name);
   }
   const suggestions = addPriceSuggestions(items);
-  assert.ok(suggestions.filter(item => item.basis === 'unpriced').every(item =>
+  assert.ok(suggestions.filter(item => item.basis === 'unpriced' && item.proposedPrice != null).every(item =>
     item.price === null && item.proposedPrice > 0 && item.proposalBasis));
 });
 

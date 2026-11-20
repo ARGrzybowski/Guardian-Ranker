@@ -40,8 +40,9 @@ const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
 }));
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
 recordDefinitions[31] = { displayProperties: { name: 'SECRET SPOILER', description: 'SECRET SOLUTION' }, stateInfo: { obscuredDescription: 'Keep playing to reveal.' } };
-const collectibleDefinitions = { 1: { displayProperties: { name: 'Test Exotic', description: 'An acquired item' } }, 2: { displayProperties: { name: 'Missing Ship', description: 'Not yet acquired' } } };
-const eververseCatalog = { schemaVersion: 7, emotePlugSetHash: 2860926541, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 6, items: [
+const collectibleDefinitions = { 1: { displayProperties: { name: 'Test Exotic', description: 'An acquired item' } }, 2: { displayProperties: { name: 'Missing Ship', description: 'Not yet acquired' } },
+  97: { itemHash: 97, displayProperties: { name: 'Unconfirmed Ship' } } };
+const eververseCatalog = { schemaVersion: 8, emotePlugSetHash: 2860926541, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 6, items: [
   [101, [1, 4], '<script>Test Shader</script>', 'Shaders', 300], [102, [2], 'Missing Ship', 'Ships', 2000], [103, [3], 'Test Shell', 'Ghost shells', null],
   [104, [5], 'Test Armor Ornament', 'Armor ornaments', 1200, 'Test Armor Set'],
   [105, [6], 'Partner Armor Ornament', 'Armor ornaments', 1600, null, 'collaboration'],
@@ -494,6 +495,10 @@ try {
   await openSection('collections', "document.querySelector('#report-collections').textContent.includes('Missing Ship')");
   await evaluate("document.querySelector('#report-collections input').value='exotic'; document.querySelector('#report-collections input').dispatchEvent(new Event('input'))");
   assert.equal(await evaluate("document.querySelectorAll('#report-collections .catalogue-item').length"), 1);
+  await evaluate(`document.querySelector('#report-collections input').value='';
+    const filter = document.querySelector('#report-collections .catalogue-filter'); filter.value = 'unconfirmed';
+    filter.dispatchEvent(new Event('change'))`);
+  assert.match(await evaluate("document.querySelector('#report-collections .catalogue-grid').textContent"), /Unconfirmed Ship.*Unconfirmed/s);
   await openSection('armor', "document.querySelector('#report-armor').textContent.includes('Test Activity Ornament')");
   assert.match(await evaluate("document.querySelector('#report-armor').textContent"), /3 ornaments · 1 owned · 1 confirmed missing · 1 unconfirmed/);
   await evaluate("document.querySelector('#report-armor input').value = 'trials'; document.querySelector('#report-armor input').dispatchEvent(new Event('input'))");

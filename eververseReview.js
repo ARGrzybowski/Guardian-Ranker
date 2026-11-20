@@ -1,6 +1,6 @@
 import { escapeHtml as e } from './html.js';
 import { bungieImage, createManifestClient } from './manifest.js';
-import { loadEververseCatalog } from './eververseValue.js?v=7';
+import { loadEververseCatalog } from './eververseValue.js?v=8';
 import { addPriceSuggestions, importPriceDecisions, PRICE_BASES, REVIEW_STATES, priceReviewQueue, reviewItems } from './eververseReviewData.js?v=4';
 
 const PAGE_SIZE = 24;
@@ -227,7 +227,7 @@ async function load() {
     let metadata;
     [catalog, metadata] = await Promise.all([
       loadEververseCatalog(signal),
-      fetch('./eververseReviewMetadata.json?v=1', { signal }).then(response => response.ok ? response.json() : null).catch(() => null)
+      fetch('./eververseReviewMetadata.json?v=2', { signal }).then(response => response.ok ? response.json() : null).catch(() => null)
     ]);
     const compatible = metadata?.schemaVersion === 1 && metadata.manifestVersion === catalog.manifestVersion;
     items = addPriceSuggestions(reviewItems(catalog, compatible ? metadata : null));
