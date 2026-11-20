@@ -28,10 +28,13 @@ export function valueEververseCollection({ owned, partial }, catalog) {
   const categories = new Map();
   let brightDust = 0;
   let pricedCount = 0;
+  let standardArmorEstimateCount = 0;
 
-  for (const [itemHash, collectibleHashes, name, category, price, ornamentSet] of catalog.items) {
+  for (const [itemHash, collectibleHashes, name, category, price, ornamentSet, standardArmorEstimate] of catalog.items) {
     if (!collectibleHashes.some(hash => owned.has(hash))) continue;
-    items.push({ itemHash, name, category, brightDust: price, ...(ornamentSet ? { ornamentSet } : {}) });
+    items.push({ itemHash, name, category, brightDust: price, ...(ornamentSet ? { ornamentSet } : {}),
+      ...(standardArmorEstimate ? { standardArmorEstimate } : {}) });
+    if (standardArmorEstimate) standardArmorEstimateCount++;
     if (!categories.has(category)) categories.set(category, { category, owned: 0, priced: 0, brightDust: 0 });
     const totals = categories.get(category);
     totals.owned++;
@@ -50,6 +53,7 @@ export function valueEververseCollection({ owned, partial }, catalog) {
     brightDust: !pricedCount && (partial || items.length) ? null : brightDust,
     ownedCount: items.length,
     pricedCount,
+    standardArmorEstimateCount,
     unpricedCount: items.length - pricedCount,
     categories: [...categories.values()].sort((a, b) => b.brightDust - a.brightDust || a.category.localeCompare(b.category)),
     items: items.sort((a, b) => (b.brightDust ?? 0) - (a.brightDust ?? 0) || a.name.localeCompare(b.name))
@@ -59,11 +63,11 @@ export function valueEververseCollection({ owned, partial }, catalog) {
 let savedCatalog;
 export async function loadEververseCatalog(signal) {
   if (savedCatalog) return savedCatalog;
-  const response = await fetch(new URL('./eververseCatalog.json?v=2', import.meta.url), { signal });
+  const response = await fetch(new URL('./eververseCatalog.json?v=3', import.meta.url), { signal });
   if (!response.ok) throw new Error('The Eververse price catalog could not be loaded.');
   const catalog = await response.json();
   signal.throwIfAborted();
-  if (catalog.schemaVersion !== 2 || !Array.isArray(catalog.items) || !catalog.pricedCount) {
+  if (catalog.schemaVersion !== 3 || !Array.isArray(catalog.items) || !catalog.pricedCount) {
     throw new Error('The Eververse price catalog is unavailable.');
   }
   savedCatalog = catalog;

@@ -14,6 +14,8 @@ Apply `supabase/manual-score-refresh.sql` before deploying the worker that suppo
 
 Apply `supabase/eververse-leaderboard.sql` before deploying the Bright Dust leaderboard worker. Each scheduled run checks up to 16 due Collections profiles and refreshes their valuations no more than weekly. Public rankings admit positive totals from complete public Collections checked within the last 21 days. The worker saves only the aggregate, methodology version, and check time alongside the normal profile snapshot. Deploy the checked-in catalogue with both the frontend and the worker.
 
+For standard armor prices, deploy the worker with catalog schema version 3 before applying `supabase/eververse-pricing-v3.sql`. The cloud worker revisits profiles on the old methodology. The view and the directory rank only valuations on the same methodology.
+
 The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
 
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase
