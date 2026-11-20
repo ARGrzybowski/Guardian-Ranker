@@ -1,4 +1,5 @@
-const HIDDEN_OR_UNOWNED = 1 | 2 | 4;
+const NOT_ACQUIRED = 1;
+const HIDDEN = 2 | 4;
 export const EMOTE_PLUG_SET = 2860926541;
 export const EVERVERSE_CATALOG_VERSION = 5;
 
@@ -7,17 +8,25 @@ function collectibleTable(scope) {
   return table && typeof table === 'object' && !Array.isArray(table) ? table : null;
 }
 
-export function eververseCollection(profile) {
+function collectionTables(profile) {
   const profileTable = collectibleTable(profile.profileCollectibles?.data);
   const characters = profile.characterCollectibles?.data;
-  const tables = [profileTable, ...Object.values(characters || {}).map(collectibleTable)].filter(Boolean);
+  return { profileTable, characters, tables: [profileTable, ...Object.values(characters || {}).map(collectibleTable)].filter(Boolean) };
+}
+
+function validState(state) {
+  return Number.isInteger(state) && state >= 0 && state <= 0x7fffffff;
+}
+
+export function eververseCollection(profile) {
+  const { profileTable, characters, tables } = collectionTables(profile);
   if (!tables.length) return null;
 
   const owned = new Set();
   for (const table of tables) {
     for (const [hash, entry] of Object.entries(table)) {
       const state = entry?.state;
-      if (Number.isInteger(state) && state >= 0 && state <= 0x7fffffff && !(state & HIDDEN_OR_UNOWNED)) owned.add(Number(hash));
+      if (validState(state) && !(state & (HIDDEN | NOT_ACQUIRED))) owned.add(Number(hash));
     }
   }
   const characterIds = Object.keys(profile.characters?.data || {});
@@ -71,6 +80,39 @@ export function valueEververseCollection({ owned, partial, emotes }, catalog) {
     categories: [...categories.values()].sort((a, b) => b.brightDust - a.brightDust || a.category.localeCompare(b.category)),
     items: items.sort((a, b) => (b.brightDust ?? 0) - (a.brightDust ?? 0) || a.name.localeCompare(b.name))
   };
+}
+
+// Collection coverage is display-only. An omitted or hidden state does not
+// establish that the Guardian has missed an item.
+export function eververseCatalogCoverage(profile, catalog, valuation) {
+  const owned = new Set(valuation.items.map(item => item.itemHash));
+  const missing = new Set();
+  const hiddenAcquired = new Set();
+  if (valuation.collectionCoverage === 'public') {
+    for (const table of collectionTables(profile).tables) {
+      for (const [hash, entry] of Object.entries(table)) {
+        const state = entry?.state;
+        if (!validState(state)) continue;
+        if ((state & (HIDDEN | NOT_ACQUIRED)) === NOT_ACQUIRED) missing.add(Number(hash));
+        if ((state & HIDDEN) && !(state & NOT_ACQUIRED)) hiddenAcquired.add(Number(hash));
+      }
+    }
+  }
+
+  const categories = new Map(valuation.categories.map(row => [row.category, {
+    ...row, catalogTotal: 0, confirmedMissing: 0, unconfirmed: 0
+  }]));
+  for (const [itemHash, aliases, , category] of catalog.items) {
+    if (!categories.has(category)) categories.set(category, {
+      category, owned: 0, priced: 0, estimated: 0, brightDust: 0, catalogTotal: 0, confirmedMissing: 0, unconfirmed: 0
+    });
+    const row = categories.get(category);
+    row.catalogTotal++;
+    if (owned.has(itemHash)) continue;
+    if (aliases.length && aliases.every(hash => missing.has(hash) && !hiddenAcquired.has(hash))) row.confirmedMissing++;
+    else row.unconfirmed++;
+  }
+  return [...categories.values()].sort((a, b) => b.brightDust - a.brightDust || a.category.localeCompare(b.category));
 }
 
 let savedCatalog;

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildEververseCatalog } from '../scripts/build-eververse-catalog.mjs';
-import { EMOTE_PLUG_SET, eververseCollection, valueEververseCollection } from '../eververseValue.js';
+import { EMOTE_PLUG_SET, eververseCatalogCoverage, eververseCollection, valueEververseCollection } from '../eververseValue.js';
 
 const collectible = (itemHash, sourceString = 'Source: Eververse') => ({ itemHash, sourceString, displayProperties: { name: `Cosmetic ${itemHash}` } });
 const offer = (itemHash, quantity, currency = 2817410917) => ({ itemHash, quantity: 1, currencies: [{ itemHash: currency, quantity }] });
@@ -53,6 +53,41 @@ test('distinguishes private collections, zero verified unlocks, and owned items 
   assert.equal(value([], false).brightDust, 0);
   assert.equal(value([], true).brightDust, null);
   assert.equal(value([1]).brightDust, null);
+});
+
+test('Eververse catalog totals distinguish owned, visibly missing, and unconfirmed items', () => {
+  const profile = {
+    profileCollectibles: { data: { collectibles: {
+      1: { state: 1 }, 2: { state: 65 }, 3: { state: 5 }, 5: { state: 1 }, 6: { state: 0 }, 7: { state: 1 }
+    } } },
+    characters: { data: { a: {} } },
+    characterCollectibles: { data: { a: { collectibles: { 1: { state: 64 }, 7: { state: 4 } } } } }
+  };
+  const catalog = { items: [
+    [101, [1], 'Owned in a character scope', 'Armor', 1200],
+    [102, [2], 'Confirmed missing', 'Armor', 1200],
+    [103, [3], 'Hidden', 'Armor', 1200],
+    [104, [4], 'Omitted', 'Armor', 1200],
+    [105, [5, 8], 'Omitted alias', 'Armor', 1200],
+    [106, [6], 'Owned without a price', 'Armor', null],
+    [107, [7], 'Conflicting hidden state', 'Armor', 1200],
+    [108, [9], 'Unowned type', 'Ghost shells', 2850],
+    [109, [], 'Wheel-only emote', 'Emotes', 700]
+  ] };
+  const coverage = () => {
+    const valuation = valueEververseCollection(eververseCollection(profile), catalog);
+    assert.equal(valuation.brightDust, 1200);
+    return eververseCatalogCoverage(profile, catalog, valuation);
+  };
+  const rows = coverage();
+  assert.deepEqual(rows[0], {
+    category: 'Armor', owned: 2, priced: 1, estimated: 0, brightDust: 1200, catalogTotal: 7, confirmedMissing: 1, unconfirmed: 4
+  });
+  assert.deepEqual(rows.slice(1).map(row => [row.category, row.owned, row.catalogTotal, row.unconfirmed]), [
+    ['Emotes', 0, 1, 1], ['Ghost shells', 0, 1, 1]
+  ]);
+  profile.characters.data.b = {};
+  assert.equal(coverage()[0].confirmedMissing, 0, 'Unavailable character states do not prove missing ownership');
 });
 
 test('published pricing snapshot has valid, unique item and collectible identifiers', () => {

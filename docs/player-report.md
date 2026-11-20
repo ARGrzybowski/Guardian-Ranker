@@ -31,6 +31,8 @@ Eververse net worth matches visible acquired collectibles across the profile and
 
 Regular unpriced cosmetics can use standard estimates by type and rarity. Legendary weapon ornaments follow the [historical 700 Bright Dust store price](https://www.youtube.com/watch?v=t-CA4vJkFPY). Exotic weapon ornaments use 1,250. Exotic Ghost shells, ships, and vehicles use 2,850, 2,000, and 2,500 respectively. Legendary shaders use 300 and Legendary finishers use 3,250. Each estimated row is labeled in the breakdown. Mask ornaments and cosmetics sold for [gameplay-earned Legendary Marks](https://help.bungie.net/hc/en-us/articles/49848696022548-Destiny-2-Monument-of-Triumph-and-Update-9-7-0-Support-Guide) are excluded.
 
+The Eververse breakdown separates owned items, the catalog total, confirmed missing items, and unconfirmed ownership. The priced count is the subset of owned items that contributes to the Bright Dust estimate. A missing item requires visible unowned states for every equivalent collectible and complete public Collections data. Hidden or omitted states and emotes without sufficient public data are unconfirmed. The complete category breakdown is included in the report JSON.
+
 ## Analysis coverage
 
 The [account rating methodology](account-rating.md) defines every weight, curve, coverage rule, limitation and example. It is an editorial account-achievement model, not a calibrated population percentile or matchmaking skill rating. Ratings load their required sources independently of other tabs and are included in JSON export when calculated.

@@ -395,6 +395,13 @@ try {
   await waitFor("document.querySelector('.eververse-value')?.textContent === '3,400 Bright Dust'");
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
   assert.match(await evaluate("document.querySelector('.eververse-details').innerText"), /4 of 5 owned Eververse cosmetics/);
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('.eververse-details thead th')].map(th => th.textContent)`),
+    ['Cosmetic type', 'Owned', 'Catalog total', 'Confirmed missing', 'Unconfirmed', 'Owned with prices', 'Bright Dust value']);
+  const shipCoverage = await evaluate(`(() => {
+    const ships = [...document.querySelectorAll('.eververse-details tbody tr')].find(row => row.querySelector('th').textContent === 'Ships');
+    return Array.from(ships.querySelectorAll('.report-cell-value'), cell => cell.textContent);
+  })()`);
+  assert.deepEqual(shipCoverage, ['0', '1', '1', '0', '0', '—']);
   await evaluate("document.querySelector('.eververse-items summary').click()");
   await waitFor("document.querySelector('.eververse-items tbody')?.textContent.includes('<script>Test Shader</script>')");
   assert.equal(await evaluate("document.querySelector('.eververse-items tbody script')"), null);
@@ -503,6 +510,8 @@ try {
   assert.equal(exported.sections.eververseNetWorth.standardArmorEstimateCount, 1);
   assert.equal(exported.sections.eververseNetWorth.standardEstimateCount, 1);
   assert.equal(exported.sections.eververseNetWorth.unpricedCount, 1);
+  assert.ok(exported.sections.eververseNetWorth.catalogCoverage.every(row =>
+    row.catalogTotal === row.owned + row.confirmedMissing + row.unconfirmed && row.priced <= row.owned));
   assert.equal(exported.sections.accountRating.version, PERFORMANCE_VERSION);
   assert.equal(exported.sections.accountRating.performance.percentile, 82);
   assert.equal(exported.sections.accountRating.knowledge.percentile, 88);
