@@ -11,7 +11,8 @@ function collectibleTable(scope) {
 function collectionTables(profile) {
   const profileTable = collectibleTable(profile.profileCollectibles?.data);
   const characters = profile.characterCollectibles?.data;
-  return { profileTable, characters, tables: [profileTable, ...Object.values(characters || {}).map(collectibleTable)].filter(Boolean) };
+  const partial = !profileTable || Object.keys(profile.characters?.data || {}).some(id => !collectibleTable(characters?.[id]));
+  return { partial, tables: [profileTable, ...Object.values(characters || {}).map(collectibleTable)].filter(Boolean) };
 }
 
 function validState(state) {
@@ -19,7 +20,7 @@ function validState(state) {
 }
 
 export function eververseCollection(profile) {
-  const { profileTable, characters, tables } = collectionTables(profile);
+  const { partial, tables } = collectionTables(profile);
   if (!tables.length) return null;
 
   const owned = new Set();
@@ -29,8 +30,6 @@ export function eververseCollection(profile) {
       if (validState(state) && !(state & (HIDDEN | NOT_ACQUIRED))) owned.add(Number(hash));
     }
   }
-  const characterIds = Object.keys(profile.characters?.data || {});
-  const partial = !profileTable || characterIds.some(id => !collectibleTable(characters?.[id]));
   const emotePlugs = profile.profilePlugSets?.data?.plugs?.[EMOTE_PLUG_SET];
   const emotes = Array.isArray(emotePlugs)
     ? new Set(emotePlugs.filter(plug => plug?.canInsert === true && plug.enabled === true).map(plug => plug.plugItemHash))
@@ -88,23 +87,28 @@ export function valueEververseCollection({ owned, partial, emotes }, catalog) {
   };
 }
 
-// Collection coverage is display-only. An omitted or hidden state does not
-// establish that the Guardian has missed an item.
-export function eververseCatalogCoverage(profile, catalog, valuation) {
-  const owned = new Set(valuation.items.map(item => item.itemHash));
+// Every alias needs a visible missing result. A hidden acquired result leaves
+// conflicting evidence unresolved.
+export function confirmedMissingCollectibles(profile) {
+  const { partial, tables } = collectionTables(profile);
   const missing = new Set();
+  if (partial) return missing;
   const hiddenAcquired = new Set();
-  if (valuation.collectionCoverage === 'public') {
-    for (const table of collectionTables(profile).tables) {
-      for (const [hash, entry] of Object.entries(table)) {
-        const state = entry?.state;
-        if (!validState(state)) continue;
-        if ((state & (HIDDEN | NOT_ACQUIRED)) === NOT_ACQUIRED) missing.add(Number(hash));
-        if ((state & HIDDEN) && !(state & NOT_ACQUIRED)) hiddenAcquired.add(Number(hash));
-      }
+  for (const table of tables) {
+    for (const [hash, entry] of Object.entries(table)) {
+      const state = entry?.state;
+      if (!validState(state)) continue;
+      if ((state & (HIDDEN | NOT_ACQUIRED)) === NOT_ACQUIRED) missing.add(Number(hash));
+      if ((state & HIDDEN) && !(state & NOT_ACQUIRED)) hiddenAcquired.add(Number(hash));
     }
   }
+  for (const hash of hiddenAcquired) missing.delete(hash);
+  return missing;
+}
 
+export function eververseCatalogCoverage(profile, catalog, valuation) {
+  const owned = new Set(valuation.items.map(item => item.itemHash));
+  const missing = valuation.collectionCoverage === 'public' ? confirmedMissingCollectibles(profile) : new Set();
   const categories = new Map(valuation.categories.map(row => [row.category, {
     ...row, catalogTotal: 0, confirmedMissing: 0, unconfirmed: 0
   }]));
@@ -115,7 +119,7 @@ export function eververseCatalogCoverage(profile, catalog, valuation) {
     const row = categories.get(category);
     row.catalogTotal++;
     if (owned.has(itemHash)) continue;
-    if (aliases.length && aliases.every(hash => missing.has(hash) && !hiddenAcquired.has(hash))) row.confirmedMissing++;
+    if (aliases.length && aliases.every(hash => missing.has(hash))) row.confirmedMissing++;
     else row.unconfirmed++;
   }
   return [...categories.values()].sort((a, b) => b.brightDust - a.brightDust || a.category.localeCompare(b.category));

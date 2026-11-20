@@ -164,7 +164,7 @@ export function buildEververseCatalog(vendors, collectibles, inventory, metadata
     pricedCount: items.filter(row => row[4] !== null).length, items };
 }
 
-async function readJson(path) {
+export async function readJson(path) {
   if (!path?.startsWith('/common/destiny2_content/json/en/') && path !== '/Platform/Destiny2/Manifest/') throw new Error('Unexpected Bungie manifest path.');
   const url = new URL(path, BUNGIE);
   if (url.origin !== BUNGIE) throw new Error('Unexpected manifest host.');
