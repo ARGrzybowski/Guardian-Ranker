@@ -4,7 +4,7 @@ const PAGE_SIZE = 25;
 const labels = {
   points: 'Points', clears: 'Clears', activities: 'Activities', events: 'Contest clears', dungeons: 'Dungeons',
   passages: 'Passages', kd: 'K/D', kills: 'Kills', rank: 'Guardian Rank', power: 'Power',
-  proof: 'Achievement', solo: 'Best solo tier'
+  proof: 'Achievement', solo: 'Best solo tier', bright_dust: 'Bright Dust'
 };
 const number = (value, digits = 0) => Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 
@@ -28,7 +28,7 @@ function option(value, label) {
 
 function guardianLink(name, board) {
   const link = node('a', name);
-  link.href = 'index.html?' + new URLSearchParams({ name }) + (board.category === 'Profiles' ? '#overview' : '#rating');
+  link.href = 'index.html?' + new URLSearchParams({ name }) + (board.category === 'Profiles' || board.unit === 'bright_dust' ? '#overview' : '#rating');
   return link;
 }
 

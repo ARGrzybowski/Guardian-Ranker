@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Leaderboards · Guardian Ranker</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=bright-dust" />
 </head>
 <body>
   <main class="main-container leaderboard-page">
@@ -52,6 +52,12 @@
     <p id="index-status" role="status" class="index-status">Checking leaderboard coverage...</p>
 
     <div class="leaderboards-container">
+      <section class="leaderboard-section">
+        <h2>Bright Dust Net Worth</h2>
+        <p class="index-status">Estimated value of owned Eververse cosmetics from verified public Collections.</p>
+        <table class="styled-table"><thead><tr><th>Rank</th><th>Bungie name</th><th>Bright Dust</th></tr></thead><tbody id="eververse-board-body"></tbody></table>
+        <a class="site-button board-full-link" href="?board=profile.eververse#discover">View full board</a>
+      </section>
       <section class="leaderboard-section">
         <h2>Guardian Performance</h2>
         <p id="rating-index-status" class="index-status">Checking cloud rating coverage...</p>
@@ -133,9 +139,9 @@
   </main>
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="leaderboard.js"></script>
-  <script type="module" src="leaderboardSearch.js"></script>
-  <script type="module" src="leaderboardDirectory.js"></script>
+  <script type="module" src="leaderboard.js?v=bright-dust"></script>
+  <script type="module" src="leaderboardSearch.js?v=bright-dust"></script>
+  <script type="module" src="leaderboardDirectory.js?v=bright-dust"></script>
 
 </body>
 </html>

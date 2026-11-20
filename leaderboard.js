@@ -10,6 +10,7 @@ export function formatPlaytime(value) {
 
 const boards = {
   rating: { source: 'guardian_activity_rankings', score: 'points', fields: ['points', 'percentile'], body: 'account-rating-body', button: 'toggleAccountRatingBtn' },
+  eververse: { source: 'guardian_eververse_rankings', score: 'eververse_bright_dust', fields: ['eververse_bright_dust'], body: 'eververse-board-body' },
   triumph: { source: 'guardian_knowledge_rankings', score: 'triumph_score', fields: ['triumph_score', 'percentile'], body: 'leaderboard-body', button: 'toggleLeaderboardBtn' },
   commendations: { source: 'guardian_commendation_rankings', score: 'commendations', fields: ['commendations', 'percentile'], body: 'commendation-body', button: 'toggleCommendationsBtn' },
   guardian: { table: 'leaderboard', score: 'guardian_rank', fields: ['guardian_rank'], body: 'guardian-rank-body', button: 'toggleGuardianRankBtn' },
@@ -23,15 +24,17 @@ function renderBoard(board, errorMessage) {
   if (!tbody) return;
   tbody.replaceChildren();
   const rows = board.showAll ? board.rows : board.rows.slice(0, 5);
+  let tiedStanding = 1;
   for (const [index, row] of rows.entries()) {
     const tr = document.createElement('tr');
     if (row.last_refreshed_at) tr.title = `Refreshed ${new Date(row.last_refreshed_at).toLocaleString()}`;
     const rank = document.createElement('td');
-    rank.textContent = row.standing ?? index + 1;
+    if (index && row[board.score] !== rows[index - 1][board.score]) tiedStanding = index + 1;
+    rank.textContent = row.standing ?? (board === boards.eververse ? tiedStanding : index + 1);
     tr.appendChild(rank);
     const nameCell = document.createElement('td');
     const link = document.createElement('a');
-    link.href = `index.html?name=${encodeURIComponent(row.bungie_name)}${board.source ? '#rating' : ''}`;
+    link.href = `index.html?name=${encodeURIComponent(row.bungie_name)}${board === boards.eververse ? '#overview' : board.source ? '#rating' : ''}`;
     link.textContent = row.bungie_name;
     link.style.color = 'inherit';
     link.style.textDecoration = 'none';
@@ -55,7 +58,7 @@ function renderBoard(board, errorMessage) {
     tr.appendChild(td);
     tbody.appendChild(tr);
   }
-  const button = document.getElementById(board.button);
+  const button = board.button && document.getElementById(board.button);
   if (button) {
     button.textContent = board.showAll ? 'Show Less' : 'Show More';
     button.setAttribute('aria-expanded', String(board.showAll));
@@ -71,16 +74,19 @@ function renderBoard(board, errorMessage) {
 }
 
 async function loadBoard(board) {
-  if (!document.getElementById(board.body)) return;
+  const tbody = document.getElementById(board.body);
+  if (!tbody) return;
   const version = ++board.version;
   try {
     const rows = [];
     let table = board.source || 'guardian_rankings';
     // Supabase caps a single response. Read all pages in a stable order.
-    const pageSize = 1000;
+    const preview = board === boards.eververse || Boolean(tbody.closest('.home-leaderboards'));
+    const pageSize = preview ? 5 : 1000;
+    const standings = board.source && board !== boards.eververse;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await getDatabase().from(table)
-        .select(['membership_id', 'bungie_name', ...board.fields, ...(board.source ? ['standing', 'cohort_size'] : []), ...(board === boards.rating ? ['rating_version'] : []), ...(table.startsWith('guardian_') ? ['last_refreshed_at'] : [])].join(','))
+        .select(['membership_id', 'bungie_name', ...board.fields, ...(standings ? ['standing', 'cohort_size'] : []), ...(board === boards.rating ? ['rating_version'] : []), ...(table.startsWith('guardian_') ? ['last_refreshed_at'] : [])].join(','))
         .order(board.score, { ascending: false, nullsFirst: false })
         .order('membership_id', { ascending: true })
         .range(offset, offset + pageSize - 1);
@@ -94,7 +100,7 @@ async function loadBoard(board) {
       }
       if (error) throw error;
       rows.push(...(data || []));
-      if (!data || data.length < pageSize) break;
+      if (preview || !data || data.length < pageSize) break;
     }
     board.rows = rows;
     renderBoard(board);
@@ -134,6 +140,7 @@ export const loadLeaderboards = () => Promise.all([loadIndexStatus(), ...Object.
 
 document.addEventListener('DOMContentLoaded', () => {
   for (const board of Object.values(boards)) {
+    if (!board.button) continue;
     document.getElementById(board.button)?.addEventListener('click', () => {
       board.showAll = !board.showAll;
       renderBoard(board);

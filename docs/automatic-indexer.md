@@ -12,6 +12,8 @@ Apply `supabase/indexer-disk-io.sql` after `supabase/crucible-seasons.sql` to li
 
 Apply `supabase/manual-score-refresh.sql` before deploying the worker that supports **Update score**. The button submits a membership ID and type. An idle cloud worker can pick up the request immediately, and the scheduled worker handles work that is still queued. The verified score and specialty standings publish through the existing snapshot writes. The normal indexer reserves capacity for scheduled scores even when manual requests are waiting.
 
+Apply `supabase/eververse-leaderboard.sql` before deploying the Bright Dust leaderboard worker. Each scheduled run checks up to 16 due Collections profiles and refreshes their valuations no more than weekly. Public rankings admit positive totals from complete public Collections checked within the last 21 days. The worker saves only the aggregate, methodology version, and check time alongside the normal profile snapshot. Deploy the checked-in catalogue with both the frontend and the worker.
+
 The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
 
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase

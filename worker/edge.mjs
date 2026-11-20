@@ -1,4 +1,5 @@
 import { API_KEY } from '../bungieApi.js';
+import eververseCatalog from '../eververseCatalog.json' with { type: 'json' };
 import { IndexStore } from './store.mjs';
 import { createBungieWorker, runIndexer } from './indexer.mjs';
 import { createPerformanceRunner, PERFORMANCE_BATCH_LIMIT } from './performance.mjs';
@@ -27,7 +28,7 @@ export function createEdgeHandler({ url, key, apiKey = API_KEY, storeFactory = o
       const signal = AbortSignal.timeout(110000);
       const store = storeFactory({ url, key, signal });
       const bungie = bungieFactory({ apiKey, maxOperations: scoresOnly ? 48 : 240, intervalMs: 334, stopAt: Date.now() + (scoresOnly ? 55000 : 80000), signal });
-      const summary = await index({ store, bungie, signal, maxProfiles: 100, profileConcurrency: 8, maxDiscoveries: 5, maxClanPages: 3, maxActivityScans: 2, maxRatings: scoresOnly ? 2 : PERFORMANCE_BATCH_LIMIT, rateProfiles, scoresOnly });
+      const summary = await index({ store, bungie, signal, maxProfiles: 100, profileConcurrency: 8, maxDiscoveries: 5, maxClanPages: 3, maxActivityScans: 2, maxRatings: scoresOnly ? 2 : PERFORMANCE_BATCH_LIMIT, rateProfiles, scoresOnly, eververseCatalog });
       console.log(JSON.stringify(summary));
       return Response.json(summary);
     } catch {

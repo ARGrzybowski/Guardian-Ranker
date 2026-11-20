@@ -1,5 +1,6 @@
 const tables = [
   ['account-rating-body', 'toggleAccountRatingBtn'],
+  ['eververse-board-body'],
   ['leaderboard-body', 'toggleLeaderboardBtn'],
   ['commendation-body', 'toggleCommendationsBtn'],
   ['guardian-rank-body', 'toggleGuardianRankBtn'],
@@ -19,7 +20,7 @@ function highlightMatches(expand = false) {
       row.classList.toggle('highlight', matches);
       if (matches) { found = true; firstMatch ??= row; }
     }
-    const button = document.getElementById(buttonId);
+    const button = buttonId && document.getElementById(buttonId);
     if (expand && !found && button?.getAttribute('aria-expanded') === 'false') button.click();
   }
   return firstMatch;
