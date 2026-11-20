@@ -1,7 +1,7 @@
 const NOT_ACQUIRED = 1;
 const HIDDEN = 2 | 4;
 export const EMOTE_PLUG_SET = 2860926541;
-export const EVERVERSE_CATALOG_VERSION = 6;
+export const EVERVERSE_CATALOG_VERSION = 7;
 
 function collectibleTable(scope) {
   const table = scope?.collectibles;
@@ -45,27 +45,43 @@ export function valueEververseCollection({ owned, partial, emotes }, catalog) {
   let standardEstimateCount = 0;
   let standardArmorEstimateCount = 0;
   let collaborationEstimateCount = 0;
+  let approvedEstimateCount = 0;
+  const sharedUnlocks = new Set();
+  const sharedPrices = new Map();
+  for (const [, , , , price, set, estimate, , sharedUnlock] of catalog.items) {
+    if (!sharedUnlock || price == null) continue;
+    const verified = !set && !estimate;
+    const best = sharedPrices.get(sharedUnlock);
+    if (!best || (verified && !best.verified) || (verified === best.verified && price < best.price)) {
+      sharedPrices.set(sharedUnlock, { price, verified });
+    }
+  }
 
-  for (const [itemHash, collectibleHashes, name, category, price, ornamentSet, estimate] of catalog.items) {
+  for (const [itemHash, collectibleHashes, name, category, price, ornamentSet, estimate, approved, sharedUnlock] of catalog.items) {
     if (!collectibleHashes.some(hash => owned.has(hash)) && !(category === 'Emotes' && emotes?.has(itemHash))) continue;
     const standardEstimate = estimate === true;
     const collaborationEstimate = estimate === 'collaboration';
     const standardArmorEstimate = standardEstimate && category === 'Armor ornaments';
-    items.push({ itemHash, name, category, brightDust: price, ...(ornamentSet ? { ornamentSet } : {}),
+    const includedWithSharedUnlock = sharedUnlock && sharedUnlocks.has(sharedUnlock);
+    if (sharedUnlock) sharedUnlocks.add(sharedUnlock);
+    const value = includedWithSharedUnlock ? 0 : sharedPrices.get(sharedUnlock)?.price ?? price;
+    items.push({ itemHash, name, category, brightDust: value, ...(ornamentSet ? { ornamentSet } : {}),
       ...(standardEstimate ? { standardEstimate } : {}), ...(standardArmorEstimate ? { standardArmorEstimate } : {}),
-      ...(collaborationEstimate ? { collaborationEstimate } : {}) });
+      ...(collaborationEstimate ? { collaborationEstimate } : {}), ...(approved ? { approvedEstimate: true } : {}),
+      ...(includedWithSharedUnlock ? { includedWithSharedUnlock: true } : {}) });
     if (standardEstimate) standardEstimateCount++;
     if (standardArmorEstimate) standardArmorEstimateCount++;
     if (collaborationEstimate) collaborationEstimateCount++;
+    if (approved) approvedEstimateCount++;
     if (!categories.has(category)) categories.set(category, { category, owned: 0, priced: 0, estimated: 0, brightDust: 0 });
     const totals = categories.get(category);
     totals.owned++;
     if (estimate || ornamentSet) totals.estimated++;
-    if (price === null) continue;
+    if (value === null) continue;
     pricedCount++;
-    brightDust += price;
+    brightDust += value;
     totals.priced++;
-    totals.brightDust += price;
+    totals.brightDust += value;
   }
 
   return {
@@ -81,6 +97,7 @@ export function valueEververseCollection({ owned, partial, emotes }, catalog) {
     standardEstimateCount,
     standardArmorEstimateCount,
     collaborationEstimateCount,
+    approvedEstimateCount,
     unpricedCount: items.length - pricedCount,
     categories: [...categories.values()].sort((a, b) => b.brightDust - a.brightDust || a.category.localeCompare(b.category)),
     items: items.sort((a, b) => (b.brightDust ?? 0) - (a.brightDust ?? 0) || a.name.localeCompare(b.name))

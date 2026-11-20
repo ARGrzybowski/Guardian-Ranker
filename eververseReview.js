@@ -1,7 +1,7 @@
 import { escapeHtml as e } from './html.js';
 import { bungieImage, createManifestClient } from './manifest.js';
-import { loadEververseCatalog } from './eververseValue.js?v=armor-catalog';
-import { addPriceSuggestions, importPriceDecisions, PRICE_BASES, REVIEW_STATES, priceReviewQueue, reviewItems } from './eververseReviewData.js?v=3';
+import { loadEververseCatalog } from './eververseValue.js?v=7';
+import { addPriceSuggestions, importPriceDecisions, PRICE_BASES, REVIEW_STATES, priceReviewQueue, reviewItems } from './eververseReviewData.js?v=4';
 
 const PAGE_SIZE = 24;
 const STORAGE_KEY = 'guardian-ranker.eververse-price-review.v1';
@@ -21,7 +21,7 @@ const priceText = price => price == null ? 'No verified price' : `${fmt.format(p
 const statusOf = item => {
   const decision = decisions.get(item.hash);
   return item.proposedPrice != null && decision?.status === 'confirmed' && decision.confirmedPrice == null
-    ? 'unreviewed' : decision?.status ?? 'unreviewed';
+    ? 'unreviewed' : decision?.status ?? (item.approved ? 'confirmed' : 'unreviewed');
 };
 const valueToReview = item => {
   const decision = decisions.get(item.hash);
@@ -84,7 +84,9 @@ function render(focus = {}) {
         </div>
       </div></li>`;
   }).join('');
-  byId('review-load-status').textContent = matches.length ? '' : 'No items match these filters.';
+  byId('review-load-status').textContent = matches.length ? '' :
+    status.value === 'open' && !totals.unreviewed && !totals.flagged
+      ? 'All prices in this queue are confirmed. Choose Confirmed to revisit them.' : 'No items match these filters.';
   byId('review-pagination').hidden = !matches.length;
   byId('review-page-info').textContent = matches.length
     ? `${fmt.format(page * PAGE_SIZE + 1)}–${fmt.format(page * PAGE_SIZE + slice.length)} of ${fmt.format(matches.length)}` : '';
@@ -128,13 +130,14 @@ function setDecision(item, status, changes = {}) {
       note: changes.note ?? decisions.get(item.hash)?.note ?? '',
       suggestedPrice: amount, confirmedPrice: status === 'confirmed' ? amount : null });
   }
-  storeDecisions(`${item.name} · ${REVIEW_STATES[status]}`);
+  storeDecisions(`${item.name} · ${REVIEW_STATES[statusOf(item)]}`);
 }
 
 function exportReviews() {
   const data = { schemaVersion: 1, catalogVersion: catalog.schemaVersion, manifestVersion: catalog.manifestVersion,
-    decisions: [...decisions.values()].map(entry => {
-      const item = itemsByHash.get(entry.itemHash);
+    decisions: items.filter(item => item.approved || decisions.has(item.hash)).map(item => {
+      const entry = decisions.get(item.hash) ?? { itemHash: item.hash, signature: item.signature, status: 'confirmed',
+        note: '', suggestedPrice: item.price, confirmedPrice: item.price };
       return { ...entry, name: item.name, category: item.category, catalogPrice: item.price, priceBasis: PRICE_BASES[item.basis],
         proposedPrice: item.proposedPrice ?? item.price, proposalBasis: item.proposalBasis ?? PRICE_BASES[item.basis] };
     })
@@ -234,7 +237,7 @@ async function load() {
     itemsByHash = new Map(items.map(item => [item.hash, item]));
     decisions = readDecisions() ?? new Map();
     filters[3].insertAdjacentHTML('beforeend', Object.entries(REVIEW_STATES).map(([key, text]) => choice(text, key)).join(''));
-    byId('catalog-info').textContent = `Proposed Bright Dust values for unpriced and estimated items${catalog.catalogDate ? ` · Catalog dated ${catalog.catalogDate}` : ''}`;
+    byId('catalog-info').textContent = `Bright Dust estimates and review decisions${catalog.catalogDate ? ` · Catalog dated ${catalog.catalogDate}` : ''}`;
     if (!compatible) message.textContent = 'Catalog prices are available. Bungie images and offer evidence could not be matched to this snapshot.';
     byId('review-controls').hidden = false;
     byId('import-reviews').disabled = false;

@@ -5,8 +5,8 @@ import { closestTriumphs, objectiveCompletion, activityInsights } from './report
 import { activityInsightsHtml, renderActivityRecords, gearStatsHtml, mountMatchWeapons, commendationsHtml } from './reportExtras.js';
 import { drawPerformanceRating, loadGuardianStandings } from './performanceView.js';
 import { renderPlayerComparison } from './comparisonView.js';
-import { eververseCatalogCoverage, eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=armor-catalog';
-import { renderArmorOrnaments } from './armorOrnamentsView.js?v=1';
+import { eververseCatalogCoverage, eververseCollection, loadEververseCatalog, valueEververseCollection } from './eververseValue.js?v=7';
+import { renderArmorOrnaments } from './armorOrnamentsView.js?v=2';
 import { refreshGuardianScore } from './indexQueue.js';
 import { reportTable } from './reportTables.js';
 
@@ -215,14 +215,15 @@ export function renderPlayerReport(container, { user, loaded, bungieName, signal
         ${note('Regular cosmetics can use the standard price for their type and rarity. Regular Legendary universal armor pieces use 1,200 Bright Dust. Eligible collaboration set pieces use 1,600 based on historical Fortnite offers. Verified prices take precedence.')}
         ${valuation.standardEstimateCount ? note(`Standard price estimates included: ${number(valuation.standardEstimateCount)}.`) : ''}
         ${valuation.collaborationEstimateCount ? note(`Collaboration set estimates included: ${number(valuation.collaborationEstimateCount)}.`) : ''}
+        ${valuation.approvedEstimateCount ? note('Approved review values estimate the worth of cosmetics. An ornament that unlocks for all classes contributes one value.') : ''}
         ${note('Items marked “No verified price” add nothing to the total. Mask ornaments, gameplay rewards, mixed-source rewards, and Bright Engram focusing are excluded.')}
       </details>`;
     const items = eververseDetails.querySelector('.eververse-items');
     items?.addEventListener('toggle', () => {
       if (items.open && !items.querySelector('table')) items.insertAdjacentHTML('beforeend', reportTable(['Cosmetic', 'Type', 'Bright Dust value', 'Price basis'],
         valuation.items.map(item => [e(item.name), e(item.category), e(amount(item.brightDust)),
-          e(item.ornamentSet ? `Estimated share of ${item.ornamentSet}` : item.collaborationEstimate ? 'Collaboration set estimate' :
-            item.standardEstimate ? 'Standard price estimate' :
+          e(item.includedWithSharedUnlock ? 'Included with shared unlock' : item.ornamentSet ? `Estimated share of ${item.ornamentSet}` :
+            item.approvedEstimate ? 'Approved estimate' : item.collaborationEstimate ? 'Collaboration set estimate' : item.standardEstimate ? 'Standard price estimate' :
             item.brightDust == null ? 'Excluded from total' : 'Individual offer')]),
         { caption: 'Individual Eververse values' }));
     });

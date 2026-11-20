@@ -1,5 +1,5 @@
 import { escapeHtml as e } from './html.js';
-import { confirmedMissingCollectibles, eververseCollection } from './eververseValue.js?v=armor-catalog';
+import { confirmedMissingCollectibles, eververseCollection } from './eververseValue.js?v=7';
 import { reportTable } from './reportTables.js';
 
 const PAGE_SIZE = 30;

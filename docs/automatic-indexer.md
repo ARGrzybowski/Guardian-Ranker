@@ -22,6 +22,8 @@ For standard prices by category, deploy catalog schema version 5 to the worker b
 
 For collaboration armor estimates, deploy catalog schema version 6 and its matching valuation module to the worker before applying `supabase/eververse-collaboration-prices.sql`. The leaderboard uses the new prices as the cloud indexer refreshes public Collections.
 
+For approved review estimates, deploy catalog schema version 7 and its matching valuation module before applying `supabase/eververse-reviewed-prices.sql`. This refresh adds values for the last unpriced items and counts each shared cross-class unlock once.
+
 The lease recovers after three minutes if a process is killed. Both operational entry points stop new requests after 80 seconds and abort at 110 seconds. The optional GitHub Actions entry point remains disabled unless explicitly configured; production scheduling remains in Supabase.
 
 The production worker runs in **Supabase Edge Functions**, scheduled by **Supabase
