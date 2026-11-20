@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { runIndexer, BudgetReached, createBungieWorker, profileSnapshot } from '../worker/indexer.mjs';
 import { IndexStore } from '../worker/store.mjs';
 import { readWorkerConfiguration } from '../worker/config.mjs';
+import { EMOTE_PLUG_SET } from '../eververseValue.js';
 
 afterEach(() => mock.restoreAll());
 const NOW = new Date('2026-11-18T12:00:00Z');
@@ -75,17 +76,18 @@ function fakeBungie({ pages = [], budget = Infinity, profiles = {}, memberships 
 }
 const run = (store, bungie, extra = {}) => runIndexer({ store, bungie, now: () => NOW, ...extra });
 
-test('cloud profile refresh limits large Collections requests and saves the shared valuation', async () => {
-  const store = new MemoryStore([queued(1, { eververse_version: 2, eververse_checked_at: NOW.toISOString() }), queued(2), queued(3)]);
+test('cloud profile refresh limits large requests and values public Collections and emote unlocks together', async () => {
+  const store = new MemoryStore([queued(1, { eververse_version: 4, eververse_checked_at: NOW.toISOString() }), queued(2), queued(3)]);
   const itemProfile = profile(2);
   itemProfile.Response.profileCollectibles = { data: { collectibles: { 7: { state: 0 } } } };
   itemProfile.Response.characterCollectibles = { data: { c: { collectibles: { 7: { state: 16 } } } } };
+  itemProfile.Response.profilePlugSets = { data: { plugs: { [EMOTE_PLUG_SET]: [{ plugItemHash: 31, canInsert: true, enabled: true }] } } };
   const bungie = fakeBungie({ profiles: { 2: itemProfile } });
-  const eververseCatalog = { schemaVersion: 2, items: [[30, [7], 'Test Ornament', 'Armor ornaments', 1200, 'Test Set']] };
+  const eververseCatalog = { schemaVersion: 4, items: [[30, [7], 'Test Ornament', 'Armor ornaments', 1200, 'Test Set'], [31, [], 'Test Emote', 'Emotes', 700]] };
   await run(store, bungie, { eververseCatalog, maxCollections: 1 });
-  assert.equal(bungie.paths.filter(path => path.includes('components=100,200,800,900')).length, 1);
-  assert.equal(store.guardians.get('2').eververse_bright_dust, 1200);
-  assert.equal(store.guardians.get('2').eververse_version, 2);
+  assert.equal(bungie.paths.filter(path => path.includes('components=100,200,305,800,900')).length, 1);
+  assert.equal(store.guardians.get('2').eververse_bright_dust, 1900);
+  assert.equal(store.guardians.get('2').eververse_version, 4);
   assert.equal(store.guardians.get('3').eververse_bright_dust, undefined);
 });
 

@@ -32,8 +32,8 @@ const specialtyCatalog = [
   { board_id: 'profile.eververse', category: 'Collections', title: 'Bright Dust Net Worth', unit: 'bright_dust', description: 'Estimated Eververse value.' }
 ];
 const brightDustRows = [
-  { membership_id: '7', bungie_name: 'Hawk#7753', eververse_bright_dust: 2700 },
-  { membership_id: '8', bungie_name: 'Cosmetic Rival#1234', eververse_bright_dust: 2700 }
+  { membership_id: '7', bungie_name: 'Hawk#7753', eververse_bright_dust: 3400 },
+  { membership_id: '8', bungie_name: 'Cosmetic Rival#1234', eververse_bright_dust: 3400 }
 ];
 const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
   membership_id: String(i), bungie_name: i === 27 ? 'FarGuardian#1234' : fixtureRows[i]?.bungie_name ?? `Board Guardian ${i}#1234`, score: 300 - i, standing: i + 1
@@ -41,10 +41,11 @@ const specialtyRows = Array.from({ length: 28 }, (_, i) => ({
 const recordDefinitions = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [i + 1, { displayProperties: { name: `Triumph ${i + 1}`, description: 'A public triumph' }, ...(i === 0 ? { titleInfo: { titlesByGender: { Male: 'Wayfarer' } } } : {}) }]));
 recordDefinitions[31] = { displayProperties: { name: 'SECRET SPOILER', description: 'SECRET SOLUTION' }, stateInfo: { obscuredDescription: 'Keep playing to reveal.' } };
 const collectibleDefinitions = { 1: { displayProperties: { name: 'Test Exotic', description: 'An acquired item' } }, 2: { displayProperties: { name: 'Missing Ship', description: 'Not yet acquired' } } };
-const eververseCatalog = { schemaVersion: 3, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 4, items: [
+const eververseCatalog = { schemaVersion: 4, emotePlugSetHash: 2860926541, manifestVersion: 'test', catalogDate: '2026-10-20', pricedCount: 5, items: [
   [101, [1, 4], '<script>Test Shader</script>', 'Shaders', 300], [102, [2], 'Missing Ship', 'Ships', 2000], [103, [3], 'Test Shell', 'Ghost shells', null],
   [104, [5], 'Test Armor Ornament', 'Armor ornaments', 1200, 'Test Armor Set'],
-  [105, [6], 'Regular Armor Ornament', 'Armor ornaments', 1200, null, true]
+  [105, [6], 'Regular Armor Ornament', 'Armor ornaments', 1200, null, true],
+  [106, [], 'Test Emote', 'Emotes', 700]
 ] };
 const databaseScript = `
 window.__writes = []; window.__dbFail = false; window.__indexMissing = false; window.__rows = ${JSON.stringify(fixtureRows)};
@@ -210,6 +211,9 @@ try {
           profileRecords: { data: { lifetimeScore: id === 'rival' ? 25000 : 10000 } },
           profileCollectibles: collectionsPrivate ? { privacy: 2 } : { data: { collectibles: { 1: { state: 0 }, 2: { state: 1 }, 3: { state: 0 }, 5: { state: 0 }, 6: { state: 0 } } } },
           characterCollectibles: collectionsPrivate ? { privacy: 2 } : { data: { 0: { collectibles: { 4: { state: 0 } } }, 1: { collectibles: {} }, 2: { collectibles: {} } } },
+          profilePlugSets: id === 'privateemotes' ? { privacy: 2 } : { data: { plugs: {
+            2860926541: [{ plugItemHash: 106, canInsert: true, enabled: true }]
+          } } },
           characterEquipment: { data: { 0: { items: [{ itemHash: 901, itemInstanceId: '10001' }] } } },
           itemComponents: { instances: { data: { 10001: { primaryStat: { value: 402 }, damageType: 3 } } }, sockets: { data: { 10001: { sockets: [{ plugHash: 902, isEnabled: true }] } } }, stats: { data: { 10001: { stats: { 905: { value: 78 } } } } } },
           characterProgressions: { data: { 0: { progressions: { 903: { level: 10, progressToNextLevel: 20, nextLevelAt: 100, currentResetCount: 2 } } } } },
@@ -388,15 +392,16 @@ try {
   await waitFor("document.querySelector('.clan-summary').textContent.includes('<script>Clan</script>')");
   assert.equal(await evaluate("document.querySelector('.clan-summary script')"), null);
   assert.ok(apiCalls.some(url => url.includes('components=100,104,200,202,204,205,300,304,305,800,900,1100,1400')));
-  await waitFor("document.querySelector('.eververse-value')?.textContent === '2,700 Bright Dust'");
+  await waitFor("document.querySelector('.eververse-value')?.textContent === '3,400 Bright Dust'");
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
-  assert.match(await evaluate("document.querySelector('.eververse-details').innerText"), /3 of 4 owned Eververse cosmetics/);
+  assert.match(await evaluate("document.querySelector('.eververse-details').innerText"), /4 of 5 owned Eververse cosmetics/);
   await evaluate("document.querySelector('.eververse-items summary').click()");
   await waitFor("document.querySelector('.eververse-items tbody')?.textContent.includes('<script>Test Shader</script>')");
   assert.equal(await evaluate("document.querySelector('.eververse-items tbody script')"), null);
-  assert.equal(await evaluate("document.querySelectorAll('.eververse-items tbody tr').length"), 4);
+  assert.equal(await evaluate("document.querySelectorAll('.eververse-items tbody tr').length"), 5);
   assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /1,200 Bright Dust.*Estimated share of Test Armor Set.*No verified price.*Excluded from total/s);
   assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /Regular Armor Ornament.*1,200 Bright Dust.*Standard armor estimate/s);
+  assert.match(await evaluate("document.querySelector('.eververse-items tbody').textContent"), /Test Emote.*700 Bright Dust.*Individual offer/s);
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'table-row');
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click()");
   async function openSection(id, condition) {
@@ -493,7 +498,8 @@ try {
   assert.equal(exported.sections.activityRecords.rows.length, 6);
   assert.equal(exported.sections.activityRecords.coverage.charactersLoaded, 3);
   assert.equal(exported.sections.metrics[0].objectiveProgress.progress, 42);
-  assert.equal(exported.sections.eververseNetWorth.brightDust, 2700);
+  assert.equal(exported.sections.eververseNetWorth.brightDust, 3400);
+  assert.equal(exported.sections.eververseNetWorth.emoteCoverage, 'public');
   assert.equal(exported.sections.eververseNetWorth.standardArmorEstimateCount, 1);
   assert.equal(exported.sections.eververseNetWorth.unpricedCount, 1);
   assert.equal(exported.sections.accountRating.version, PERFORMANCE_VERSION);
@@ -528,6 +534,9 @@ try {
   await search('PrivateCollections#1234');
   await waitFor("document.querySelector('.eververse-details')?.textContent.includes('did not return public Collections data')");
   assert.equal(await evaluate("document.querySelector('.eververse-value').textContent"), 'Unavailable');
+  await search('PrivateEmotes#1234');
+  await waitFor("document.querySelector('.eververse-details')?.textContent.includes('did not return public emote data')");
+  assert.equal(await evaluate("document.querySelector('.eververse-value').textContent"), '2,700 Bright Dust');
   await search('Private#1234');
   await waitFor("document.getElementById('results').textContent.includes('No public characters')");
   await search('Missing#1234');
@@ -548,7 +557,7 @@ try {
   await waitFor("document.querySelector('#results .bungie-name')?.textContent === 'Hawk#7753'");
   await resize(390, 844, true);
   await evaluate("document.querySelector('#suggestions').classList.remove('show')");
-  await openSection('overview', "document.querySelector('.eververse-value')?.textContent === '2,700 Bright Dust'");
+  await openSection('overview', "document.querySelector('.eververse-value')?.textContent === '3,400 Bright Dust'");
   await assertSidebar(false);
   await evaluate('window.scrollTo(0, 0)');
   assert.ok(await evaluate(`Math.abs(document.querySelector('#nameInput').getBoundingClientRect().top -
@@ -566,9 +575,9 @@ try {
   const mobileSidebar = await cdp('Page.captureScreenshot', { format: 'png' });
   await writeFile(join(artifactDir, 'global-sidebar-mobile.png'), Buffer.from(mobileSidebar.data, 'base64'));
   await evaluate("document.querySelector('#game-season-details summary').click()");
-  await waitFor("document.querySelector('.eververse-value')?.textContent === '2,700 Bright Dust'");
+  await waitFor("document.querySelector('.eververse-value')?.textContent === '3,400 Bright Dust'");
   await evaluate("document.querySelector('.eververse-details').parentElement.querySelector('summary').click(); document.querySelector('.eververse-items summary').click()");
-  await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 4 && document.querySelector('.eververse-items .report-cell-label').getClientRects().length");
+  await waitFor("document.querySelectorAll('.eververse-items tbody tr').length === 5 && document.querySelector('.eververse-items .report-cell-label').getClientRects().length");
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.eververse-items tbody tr')).display"), 'grid');
   await assertLayout('Eververse breakdown');
   await openSection('activities', "document.querySelectorAll('.match-open').length === 25");
@@ -636,7 +645,7 @@ try {
   await waitFor("document.querySelector('#account-rating-body a')");
   await assertLayout('Leaderboards with a long player name');
   await cdp('Page.navigate', { url: `${origin}/leaderboards.html?board=profile.eververse#discover` });
-  await waitFor("document.querySelector('#board-rows').textContent.includes('2,700')");
+  await waitFor("document.querySelector('#board-rows').textContent.includes('3,400')");
   assert.equal(await evaluate("document.querySelector('#board-unit').textContent"), 'Bright Dust');
   assert.equal(await evaluate("document.querySelectorAll('#board-rows tr a').length"), 2);
   assert.ok(await evaluate("document.querySelector('#board-rows a').href.endsWith('#overview')"));

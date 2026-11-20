@@ -87,7 +87,7 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
           (row.eververse_version !== eververseCatalog.schemaVersion || !row.eververse_checked_at ||
             now().getTime() - Date.parse(row.eververse_checked_at) >= 7 * 86400000);
         if (checkCollection) collectionsRemaining--;
-        const components = checkCollection ? '100,200,800,900' : '100,200,900';
+        const components = checkCollection ? '100,200,305,800,900' : '100,200,900';
         let identityCheckedAt = row.identity_checked_at;
         const cachedIdentity = row.membership_type != null && row.identity_checked_at &&
           now().getTime() - Date.parse(row.identity_checked_at) < 86400000;
@@ -115,7 +115,7 @@ export async function runIndexer({ store, bungie, signal, now = () => new Date()
         if (checkCollection) {
           const collection = eververseCollection(loaded.profileData.Response);
           snapshot.eververse_version = eververseCatalog.schemaVersion;
-          snapshot.eververse_bright_dust = collection && !collection.partial
+          snapshot.eververse_bright_dust = collection && !collection.partial && collection.emotes !== null
             ? valueEververseCollection(collection, eververseCatalog).brightDust : null;
         }
         snapshot.identity_checked_at = identityCheckedAt;
